@@ -1,0 +1,402 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+
+<dom-module id="sonnet-contact-service">
+	<script>
+		'use strict';
+		
+		class SonnetContactService extends SonnetAbstractService {
+
+			static get is () {
+				return 'sonnet-contact-service';
+			}
+
+			static get properties () {
+				return {
+					currentUser: {
+						type: Object,
+						value: {}
+					},
+					contacts: {
+						type: Array,
+						value: [],
+						notify: true
+					},
+					contactDir: {
+						type: Object,
+						computed: '_computeContactDir(contacts)',
+						notify: true
+					},
+					tempOnlineContacts: {
+						type: Array,
+						value: [],
+						notify: true
+					},
+					bLogin: {
+						type: Boolean,
+						value: false,
+						notify: true
+					},
+					bClientList: {
+						type: Boolean,
+						value: false,
+						notify: true
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+
+				// Hook into Socket Service (So updated contact list can be reflected)
+				this.loadService('sonnet-socket-service')
+				.then((socketService) => {
+					// socketService.addEventListener('client-list', this._updateContactList.bind(this)); // one time event
+					// socketService.addEventListener('client-connect', this._addContact.bind(this));
+					// socketService.addEventListener('client-disconnect', this._deleteContactLocal.bind(this));
+					
+					socketService.addEventListener('client-list', this._clientListEventHandler.bind(this)); // one time event
+					socketService.addEventListener('online', (event) => {
+						this._updateContactsOnlineStatus([
+							event.detail.payload[0]
+						], true);
+					});
+					// TODO: handle unclean disconnects as specified in sonnet-remote-client.js
+					socketService.addEventListener('offline', (event) => {
+						this._updateContactsOnlineStatus([
+							event.detail.payload[0]
+						], false);
+					});
+					
+					// listen for contact add requests
+					socketService.addEventListener('invitation', this._clientInvitationEventHandler.bind(this));
+				});
+				
+				// hook into Session Service
+				// so can update contacts' online status
+				this.loadService('sonnet-session-service')
+				.then((sessionService) => {
+					sessionService.addEventListener('login', this._loginHandler.bind(this));
+				});
+			}
+
+			// TODO: refactor
+			getContactById (id) {
+				for (let i = 0; i < this.contacts.length; i++) {
+					if (this.contacts[i].id === id) {
+						return this.contacts[i];
+					}
+				}
+
+				return null;
+			}
+
+			_updateContactList (e) {
+				console.log("_updateContactList");
+				this.set('contacts', e.detail.payload);
+			}
+
+
+			// _addContact (e) {
+			// 	// If contact does not exist
+			// 	var newContact = e.detail.payload;
+            // 
+			// 	if (this._contactExists(newContact) === -1) {
+			// 		var updatedContacts = [];
+            // 
+			// 		this.contacts.forEach((contact) => {
+			// 			updatedContacts.push(contact);
+			// 		});
+            // 
+			// 		updatedContacts.push(newContact);
+            // 
+			// 		this.set('contacts', updatedContacts);
+			// 	}
+            // 
+			// 	// Don't know why this.push doesn't work...
+            // 
+			// 	// if (this.contacts.indexOf(e.detail) === -1) {
+			// 	// 	this.push('contacts', e.detail);
+            // 
+			// 	// 	console.log(this.contacts);
+			// 	// }
+			// }
+			
+			addContact (newContact) {
+				return new Promise((resolve, reject) => {
+					var messageService;
+					
+					// add to local list
+					if (!this._contactExists(newContact)) {
+						this._createContactLocal(newContact);
+						
+						// then save to DB
+						// TODO: these operations need to be promise-chained properly
+						this._createContactInDb(newContact);
+						
+						// TODO: assume the contact is online
+						// if possible, check online users using sonnet
+						this._updateContactsOnlineStatus([newContact.id], true)
+						
+						// send self a msg that appears to be from new contact saying thanks, lets chat
+						this.loadService('sonnet-message-service')
+						.then((service) => {
+							messageService = service;
+							messageService.sendSelfMsg(newContact.id, 'Hi, thanks for adding me. Let\'s chat!');
+							resolve();
+						});
+					}
+					else {
+						// TODO: reject properly
+						// console.log('Contact is already in your list!');
+						// alert('Sonnet Message:\n\n' + newContact.name + ' is already in your contacts list.');
+						// reject(new TypeError(newContact.name + ' is already in your contacts list.'));
+						resolve();
+					}
+				});
+			}
+			
+			// TODO: remove dependency on sessionservice for user info
+			sendAddContactRequest (targetContact) {
+				console.log('SonnetContactService::sendAddContactRequest: I want to add ' + targetContact.name + ' to my contacts list!');
+				console.log(targetContact);
+				
+				var socketService;
+				var sessionService;
+				
+				Promise.all([
+					this.loadService('sonnet-socket-service'),
+					this.loadService('sonnet-session-service')
+				])
+				.then((values) => {
+					socketService = values[0];
+					sessionService = values[1];
+					
+					socketService.sendData({
+						source: this.currentUser.userId,
+						destination: targetContact.id,
+						type: 'invitation',
+						payload: [
+							this.currentUser.userId,
+							this.currentUser.displayName, // TODO: displayName
+							this.currentUser.icon
+						],
+						timestamp: new Date()
+					});
+				});
+			}
+			
+			_createContactLocal (newContact) {
+				this.push('contacts', newContact);
+				
+				this._updateContactsOnlineStatus([newContact], true);
+			}
+			
+			_createContactInDb (contact) {
+				var storageService;
+				
+				return new Promise((resolve, reject) => {
+					this.loadService('sonnet-storage-service')
+					.then((service) => {
+						storageService = service;
+						return storageService.openUserDb();
+					})
+					.then((userDb) => {
+						var transaction = userDb.transaction('contacts', 'readwrite'),
+							contactsTable = transaction.objectStore('contacts');
+						
+						var getContact = contactsTable.get(contact.id);
+						
+						getContact.onsuccess = () => {
+							if (!getContact.result) {
+								contactsTable.put({
+									id: contact.id,
+									name: contact.name, // TODO: displayName
+									icon: contact.icon,
+									created: new Date()
+								});
+							}
+						};
+						
+						transaction.oncomplete = (e) => {
+							resolve();
+							userDb.close();
+						};
+					})
+				})
+			}
+			
+			_deleteContactLocal (e) {
+				var newContact = e.detail.payload,
+					contactExists = this._contactExists(newContact);
+
+				if (contactExists) {
+					for (let i = 0; i < this.contacts.length; i++) {
+						if (this.contacts[i].id === newContact.id) {
+							this.splice('contacts', i, 1);
+							return;
+						}
+					}
+				}
+			}
+			
+			// TODO: _deleteContactInDb
+
+			// local contacts obj/dictionary for faster lookup by id
+			_computeContactDir (contacts) {
+				var contactDir = {};
+
+				contacts.forEach((contact) => {
+					contactDir[contact.id] = contact;
+				});
+
+				return contactDir;
+			}
+
+			_contactExists (contact) {
+				for (let i = 0; i < this.contacts.length; i++) {
+					if (this.contacts[i].id === contact.id) {
+						return true;
+					}
+				}
+				return false;
+			}
+			
+			getContacts () {
+				console.log("local contacts");
+				console.log(this.contacts);
+				return this.contacts;
+			}
+			
+			_readContacts () {
+				return new Promise((resolve, reject) => {
+					this.loadService('sonnet-storage-service')
+					.then((storageService) => {
+						return storageService.openUserDb();
+					})
+					.then((userDb) => {
+						var transaction = userDb.transaction('contacts', 'readonly'),
+							contactsTable = transaction.objectStore('contacts');
+
+						var getContact = contactsTable.getAll();
+
+						getContact.onsuccess = () => {
+							resolve(getContact.result);
+						};
+
+						transaction.oncomplete = (e) => {
+							userDb.close();
+						};
+					});
+				});
+			}
+			
+			_initContactList () {
+				return new Promise((resolve, reject) => {
+					this._readContacts()
+					.then((savedContacts) => {
+						var contactsWithDefaultStatus = savedContacts.map((savedContact) => {
+							let temp = savedContact;
+							temp.online = false;
+							return temp;
+						});
+						this.set('contacts', contactsWithDefaultStatus);
+						resolve();
+					})
+				})
+				
+			}
+			
+			// _loginPromise () {
+			// 	return new Promise((resolve, reject) => {
+			// 		this.loadService('sonnet-session-service')
+			// 		.then((sessionService) => {
+			// 			sessionService.addEventListener('login', resolve);
+			// 		});
+			// 	});
+			// }
+			// 
+			// _clientListPromise () {
+			// 	return new Promise((resolve, reject) => {
+			// 		this.loadService('sonnet-socket-service')
+			// 		.then((socketService) => {
+			// 			// one time event
+			// 			socketService.addEventListener('client-list', (event) => {
+			// 				resolve(event.detail.payload)
+			// 			}); 
+			// 		});
+			// 	});
+			// }
+			
+			_loginHandler (event) {
+				console.log('SonnetContactService::_loginHandler: login event fired!');
+				this._initContactList()
+				.then(() => {
+					// if client-list fired first, 
+					// use the data it left to set online status
+					if (this.bClientList) {
+						this._updateContactsOnlineStatus(this.tempOnlineContacts, true);
+					}
+					this.bLogin = true;
+				});
+			}
+			
+			_clientListEventHandler (event) {
+				var clientList = event.detail.payload;
+
+				// if already logged in
+				if (this.bLogin) {
+					this._updateContactsOnlineStatus(clientList, true);
+				
+				} else {
+					// leave the online contacts list for the login handler later
+					this.set('tempOnlineContacts', clientList);
+				}
+				this.bClientList = true;
+			}
+			
+			_clientInvitationEventHandler (event) {
+				var newContact = {
+					id: event.detail.payload[0],
+					name: event.detail.payload[1],
+					icon: event.detail.payload[2]
+				};
+
+				this.loadPage('sonnet-contacts-page');
+				this.addContact(newContact)
+				.then(() => {
+					this._updateContactsOnlineStatus([newContact.id], true)
+				});
+				// TODO: catch statement
+			}
+			
+			_updateContactsOnlineStatus (changedContacts, newOnlineStatus) {
+				var updatedStatusContacts = this.contacts.map((savedContact) => {
+					var updatedContact = savedContact;
+
+					// If changedContacts contains id
+					if (changedContacts.indexOf(savedContact.id) !== -1) {
+						updatedContact.online = newOnlineStatus;
+					}
+
+					return updatedContact;
+				});
+
+				this.set('contacts', updatedStatusContacts);
+			}
+			
+			_testClientEventListener (event) {
+				console.log('client event type: ' + event.type);
+				console.log(event);
+			}
+		}
+
+		window.customElements.define(SonnetContactService.is, SonnetContactService);
+	</script>
+</dom-module>

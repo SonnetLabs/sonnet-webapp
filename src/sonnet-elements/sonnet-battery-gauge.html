@@ -1,0 +1,153 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html">-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html">-->
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="./sonnet-styles.html">
+
+<!--
+`sonnet-battery-gauge`
+Styled buttons
+
+@demo demo/index.html
+-->
+
+<dom-module id="sonnet-battery-gauge">
+	<template>
+        <style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				-webkit-box-sizing: border-box;
+                box-sizing: border-box;
+			}
+            
+            .square {
+                height: 21px;
+                width: 15px;
+            }
+            
+            .bar-container {
+                width: 100%;
+            }
+            
+            .invisible {
+                visibility: hidden;
+            }
+            
+            .gauge {
+                width: 67px;
+                height: auto;
+                border: 1px solid #888888;
+                background-color: #fff;
+                padding: 1px;
+            }
+            
+            .gauge-empty {
+                border: 1px solid #e74c3c;
+            }
+            
+            .batt4 {
+                background-color: #3498db;
+            }
+            
+            .batt3 {
+                background-color: #2ecc71;
+            }
+            
+            .batt2 {
+                background-color: #f1c40f;
+            }
+            
+            .batt1 {
+                background-color: #e74c3c;
+            }
+
+			
+		</style>
+        
+        <div class$="{{_computeGaugeClass(bars)}}">
+            <div class="bar-container horizontal center layout justified">
+                <dom-repeat items="[[barArr]]" as="bar">
+                <template>
+                    <div class$="{{_computeBarClass(bar, bars)}}"></div>
+                </template>
+            </dom-repeat>
+            </div>
+        </div>
+		
+	</template>
+
+	<script>
+		'use strict';
+		
+		class SonnetBatteryGauge extends Polymer.Element {
+			static get is () {
+				return 'sonnet-battery-gauge';
+			}
+			
+			static get properties () {
+				return {
+					barArr: {
+                        type: Array,
+                        value: [ 1, 2, 3, 4 ]
+                    },
+                    bars: {
+                        type: Number
+                    },
+                    maxBars: {
+                        type: Number,
+                        value: 4
+                    }
+				};
+			}
+
+			_computeGaugeClass (bars) {
+                let classes = "gauge vertical layout layout-justified center center-justified"; // add transparent/white with border
+                
+                if (bars === 0) {
+                    // make the outline red instead
+                    classes += " gauge-empty";
+                }
+                
+                return classes;
+            }
+            
+            _computeBarClass (bar, bars) {
+                let classes = "square";
+                if (bars < bar) {
+                    // make invisible, but still there
+                    // will handle case this.bars === 0
+                    classes += " invisible";
+                }
+                else {
+                    switch (bars) {
+                        case 4:
+                            classes += " batt4"
+                            break;
+                        case 3:
+                            classes += " batt3"
+                            break;
+                        case 2:
+                            classes += " batt2"
+                            break;
+                        case 1:
+                            classes += " batt1"
+                            break;
+                    }
+                }
+                
+                return classes;
+            }
+            
+            setBars (bars) {
+                console.log('sonnet-battery-gauge: setBars')
+                if (bars > this.maxBars || bars < 0) {
+                    console.log('Invalid bars:', bars);
+                    console.log('Min:', 0, 'max:', this.maxBars);
+                    return;
+                }
+                this.set('bars', bars);
+            }
+		}
+
+		window.customElements.define(SonnetBatteryGauge.is, SonnetBatteryGauge);
+	</script>
+</dom-module>

@@ -1,0 +1,160 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<link rel="import" href="../../bower_components/iron-ajax/iron-request.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+
+<link rel="import" href="../../bower_components/iron-ajax/iron-request.html" />
+
+
+<dom-module id="sonnet-rest-service">
+	<template>
+	</template>
+	<script>
+		'use strict';
+		
+		class SonnetRestService extends SonnetAbstractService {
+
+			static get is () {
+				return 'sonnet-rest-service';
+			}
+
+			static get properties () {
+				return {
+					jwt: {
+						type: String,
+						notify: true
+					},
+					settingsTokenIsValid: {
+						type: Boolean,
+						notify: true
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+				this.set('hostUrl', 'https://app.sonnetlabs.com')
+			}
+			
+			getUrl (url) {
+				return new Promise((resolve, reject) => {
+					let xhr = document.createElement('iron-request');
+					xhr.send({ url: url, method: "GET"})
+					.then(request => {
+						return resolve(JSON.parse(request.response));
+					}).catch(err => {
+						return reject(err);
+					});
+				});
+			}
+			
+			postBackend (options, endpoint, operation, body) {
+				return new Promise((resolve, reject) => {
+					let payload = {
+						body: body,
+						headers: {
+							'Content-Type': 'application/json'
+						},
+						method: "POST",
+						rejectWithRequest: true,
+						url: this.hostUrl + '/' + endpoint + '/' + operation
+					};
+					
+					let respHandler;
+					let errHandler;
+					
+					let defaultRespHandler = resp => {
+						// console.log('device backend request response');
+						let parsed;
+						if (resp.response) parsed = JSON.parse(resp.response);
+						// console.log(response);
+						return resolve(parsed);
+					};
+					
+					let defaultErrHandler = errObj => {
+						let parsed = JSON.parse(errObj.request.response);
+						if (parsed && parsed.hasOwnProperty('error')) {
+							console.log(payload.url + ": " + parsed.error)
+		                    return reject(new Error(parsed.error));
+						}
+						
+						console.log('Cannot reach Sonnet backend')
+						return reject(new Error('Cannot contact Sonnet device.\n\nPlease confirm that your device is connected to the Sonnet\'s Wi-Fi network.\n\nIf you are still experiencing issues, please reboot the Sonnet device.'))
+					};
+					
+					switch (endpoint) {
+						case 'auth':
+							if (options && options.token) {
+								payload.headers.Authorization = 'Bearer ' + options.token;
+							}
+							
+							respHandler = defaultRespHandler;
+							errHandler = defaultErrHandler;
+							break;
+						case 'device':
+							respHandler = defaultRespHandler;
+							errHandler = defaultErrHandler;
+							break;
+							
+						case 'settings':
+							payload.headers.Authorization = 'Bearer ' + this.jwt;
+							
+							respHandler = request => {
+								let response;
+								if (request.response) response = JSON.parse(request.response);
+								// console.log(response);
+								
+								// console.log('device backend request response');
+								let rawHeaders = request.xhr.getAllResponseHeaders();
+								
+								let headersArr = rawHeaders.trim().split(/[\r\n]+/);
+								
+								let headers = {};
+								headersArr.forEach((line) => {
+								  	let parts = line.split(': ');
+								  	let header = parts.shift();
+								  	let value = parts.join(': ');
+								  	headers[header] = value;
+								});
+								
+								let authHeader = headers.authorization || headers.Authorization;
+								if (authHeader) {
+									this.set('jwt', authHeader.split(' ')[1]);
+								}
+			                    return resolve(response);
+			                };
+							
+							errHandler = errObj => {
+								console.log('settings request caught')
+								// if 401, improper authorization
+								let statusCode = errObj.request.status;
+								if (statusCode === 401) {
+									console.log('settingsTokenIsValid: false')
+									this.set('settingsTokenIsValid', false);
+								}
+								
+								return defaultErrHandler(errObj);
+			                }
+							
+							break;
+							
+						default:
+							return reject('Unrecognized endpoint: ' + endpoint);
+					} // end switch case
+					
+					var xhrElement = document.createElement('iron-request');
+					xhrElement.send(payload)
+					.then(respHandler).catch(errHandler);
+				})
+			}
+			
+		}
+
+		window.customElements.define(SonnetRestService.is, SonnetRestService);
+	</script>
+</dom-module>

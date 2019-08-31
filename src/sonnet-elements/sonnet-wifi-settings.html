@@ -1,0 +1,589 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+
+<dom-module id="sonnet-wifi-settings">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+			
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+			}
+            
+			.available-network-entry {
+				height: auto;
+			}
+            
+			.wifi-name {
+				height: 100%;
+			}
+            
+
+			
+			#container {
+				width: 100%;
+				height: 100%;
+			}
+            
+            #networks-container {
+				height: auto;
+				width: 100%;
+				/* max-height: 200px; */
+				/* overflow: scroll; */
+			}
+			
+			/* TODO: put in sonnet-styles */
+            .settings-button {
+				padding-left: 10px;
+				padding-right: 10px;
+			}
+            
+			.settings-entry, .settings-button {
+				height: 50px;
+			}
+
+			/* TODO: put in sonnet-styles */
+			.subtext {
+				font-size: 14px;
+				color: #888888;
+			}
+			
+			/* TODO: put in sonnet-styles */
+			.no-horizontal-padding {
+				padding-left: 0;
+				padding-right: 0;
+			}
+			
+			.firmware-update-info-container {
+				margin-right: 10px;
+			}
+            
+            .wifi-name {
+				height: 100%;
+			}
+            
+            .wifi-entry {
+                height: 40px;
+            }
+            
+            .connected-network {
+				color: #3498db;
+			}
+			
+			.connected-checkmark-div {
+				width: 24px;
+			}
+			
+            .delete-btn-div {
+                height: 50px;
+                width: 50px;
+            }
+            
+			.move-wifi-container {
+				min-width: 24px;
+			}
+            
+            /* TODO: move this to sonnet styles */
+            .sub-entry {
+				padding-left: 10px;
+			}
+            
+            .nearby-networks-icon-div {
+                margin-right: 13px;
+            }
+            
+            .wide-button {
+                width: 100%;
+                padding-left: 13px;
+                padding-right: 13px;
+            }
+		</style>
+
+        <div id="container">
+            <sonnet-button id="scan-wifi-btn" class="wide-button" size="small" on-click="_onRefreshNearbyWifiNetworks" class="full-width no-horizontal-padding">
+                <iron-icon icon="sonnet:repeat"></iron-icon> [[scanBtnText]]
+            </sonnet-button>
+            
+            <div class="sub-entry vertical layout center">
+                <div id="networks-container">
+                    <dom-repeat items="[[wifiNetworks]]" as="network" sort="_sortNetworks" filter="_filterNetworks">
+                    <template>
+                        <div class$="[[_computeWifiClass(network)]]" on-click="_onConnectToWifi">
+                            <div class="horizontal layout center flex">
+                                <div class="horizontal center layout connected-checkmark-div">
+                                    <iron-icon icon="sonnet:check" hidden="[[_computeConnected(network)]]"></iron-icon>
+                                </div>
+                                
+                                <div class="horizontal">
+                                    <div class="vertical center-justified layout">
+                                        <div>
+                                            [[network.ssid]]
+                                        </div>
+                                        
+                                        <dom-if if="{{_computeSavedNetwork(network)}}">
+                                        <template>
+                                            <div class="subtext">
+                                                Saved
+                                            </div>
+                                        </template>
+                                        </dom-if>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- RHS icons -->
+                            <!-- nearby networks, not saved -->
+                            <dom-if if="{{_computeNearbyNetwork(network)}}">
+                            <template>
+                                <div class="horizontal layout center nearby-networks-icon-div">
+                                    <dom-if if="{{_computeAuthIcon(network)}}">
+                                    <template>
+                                        <iron-icon icon="sonnet:lock"></iron-icon>
+                                    </template>
+                                    </dom-if>
+                                    
+                                    <div>
+                                        <iron-icon icon="sonnet:signal" ></iron-icon>
+                                    </div>
+                                </div>
+                            </template>
+                            </dom-if>
+                            
+                            <!-- saved network -->
+                            <dom-if if="{{_computeSavedNetwork(network)}}">
+                            <template>
+                                <div class="horizontal layout center center-justified delete-btn-div" on-click="_onDeleteWifi">
+                                    <iron-icon icon="sonnet:cross"></iron-icon>
+                                </div>
+                            </template>
+                            </dom-if>
+                        </div>
+                    </template>
+                    </dom-repeat>
+                </div>
+            </div>
+            
+            <sonnet-button id="restart-wifi-btn" class="wide-button" size="small" on-click="_onDisconnectFromWifi" class="full-width no-horizontal-padding">
+                <iron-icon icon="sonnet:cross"></iron-icon> Disconnect From Wi-Fi
+            </sonnet-button>
+        </div>
+	</template>
+	
+	<script>
+		'use strict';
+		
+		class SonnetWifiSettings extends Polymer.Element {
+			static get is () {
+				return 'sonnet-wifi-settings';
+			}
+			
+			static get properties () {
+				return {
+                    currentWifi: {
+						type: Object,
+						value:  {}
+					},
+					savedNetworks: {
+						type: Array,
+						value: []
+					},
+					nearbyNetworks: {
+						type: Array,
+						value: []
+					},
+					wifiNetworks: {
+						type: Array,
+						value: []
+					},
+					scanBtnText: {
+						type: String,
+						value: 'Refresh'
+					},
+					alerts: {
+						type: Object,
+						// TODO: clean this up or deprecate connectToWifi when migrated to Omega1
+						value: {
+							connectToWifi: 'The Sonnet will now attempt to connect to Wi-Fi. The Sonnet\'s Wi-Fi connection will now restart.\nPlease check your device\'s Wi-Fi settings to rejoin the Sonnet\'s access point when it reappears.',
+							restartWifi: 'The Sonnet\'s Wi-Fi connection will now restart.\nPlease check your device\'s Wi-Fi settings to rejoin the Sonnet\'s access point.\nYou may have to tap \'Reconnect Now\' in the chat window to reconnect the app to the Sonnet.',
+							disconnectWifi: 'The Sonnet will now disconnect from any connected networks. The Sonnet\'s Wi-Fi connection will now restart.\nPlease check your device\'s Wi-Fi settings to rejoin the Sonnet\'s access point when it reappears.'
+						}
+					}
+				};
+			}
+			
+			constructor () {
+				super();
+			}
+			
+			ready () {
+				super.ready();
+				
+				this.loadService = SonnetApp.instance.loadService.bind(SonnetApp.instance);
+				this.loadPage = SonnetApp.instance.loadPage.bind(SonnetApp.instance);
+			}
+			
+            getAvailableWifiNetworks () {
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'settings',
+						'get-available-wifi-networks',
+						null
+					);
+				});
+			}
+			
+			setAvailableWifiNetworks () {
+				return new Promise((resolve, reject) => {
+					this.getAvailableWifiNetworks()
+					.then(availableWifiNetworks => {
+						this.set('availableWifiNetworks', []);
+						for (let i = 0; i < availableWifiNetworks.length; i++) {
+							this.push('availableWifiNetworks', availableWifiNetworks[i]);
+						}
+						this.notifyPath('availableWifiNetworks');
+						
+						return resolve();
+					}).catch((err) => {
+						return reject(err);
+					});
+				});
+			}
+			
+			getCurrentWifi () {
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'settings',
+						'get-current-wifi',
+						null
+					);
+				});
+			}
+			
+			getSavedWifiNetworks () {
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'settings',
+						'get-saved-wifi-networks',
+						null
+					);
+				});
+			}
+            
+            wifiScan () {
+				return new Promise((resolve, reject) => {
+					let results = [];
+					this.getCurrentWifi()
+					.catch(err => {
+						alert('Error reading current Wi-Fi network.');
+						return Promise.resolve(null);
+					}).then(currentWifi => {
+						if (!currentWifi || !currentWifi.ssid || currentWifi.ssid === '') {
+							this.set('currentWifi', {});
+						}
+						else {
+							this.set('currentWifi', currentWifi);
+							results.push(currentWifi);
+						}
+						return this.getSavedWifiNetworks()
+						.catch(err => {
+							alert('Error getting saved Wi-Fi networks.');
+							return Promise.resolve();
+						});
+					}).then(savedNetworks => {
+						if (savedNetworks) {
+							this.set('savedNetworks', savedNetworks);
+							
+						} else this.set('savedNetworks', []);
+						
+						return this.getAvailableWifiNetworks()
+						.catch(err => {
+							alert('Error scanning nearby Wi-Fi networks.');
+							return Promise.resolve();
+						});
+					}).then(nearbyNetworks => {
+						if (nearbyNetworks) {
+							this.set('nearbyNetworks', nearbyNetworks);
+						} else this.set('nearbyNetworks', []);
+						
+						// begin list building
+						for (let i = 0; i < this.savedNetworks.length; i++) {
+							this.savedNetworks[i].saved = true;
+							if (this.savedNetworks[i].ssid !== this.currentWifi.ssid) {
+								results.push(this.savedNetworks[i]);
+							}
+						}
+						
+						// mark saved networks that are in range
+						for (let i = 0; i < this.nearbyNetworks.length; i++) {
+							let savedFoundNearby = false;
+							this.nearbyNetworks[i].nearby = true;
+							this.nearbyNetworks[i].saved = false;
+							
+							for (let j = 0; j < results.length; j++) {
+								if (this.nearbyNetworks[i].ssid === results[j].ssid) {
+									results[j].nearby = true;
+									this.nearbyNetworks[i].saved = true;
+									// avoid adding this nearby network as it's already accounted for
+									savedFoundNearby = true;
+									break;
+								}
+							}
+							
+							if (!savedFoundNearby) {
+								results.push(this.nearbyNetworks[i]);
+							}
+						}
+						
+						this.set('wifiNetworks', []);
+						for (let i = 0; i < results.length; i++) {
+							this.push('wifiNetworks', results[i])
+						}
+						
+						this.notifyPath('wifiNetworks');
+						return resolve();
+					});
+				});
+			}
+			
+			_onConnectToWifi (e) {
+                this._setUnclickable();
+                
+				let network = e.model.network;
+				if (network.ssid === this.currentWifi.ssid) return;
+				
+                // connect only if the network is nearby
+                // else the sonnet's wifi will be stuck off for a while while it looks for the network
+				if (network.nearby) {
+					let operation;
+					let body = {
+						ssid: network.ssid
+					};
+					
+					if (network.saved) {
+						operation = 'connect-to-saved-wifi';
+					} else {
+						operation = 'connect-to-wifi';
+						
+						let key;
+						if (network.encryption.toUpperCase() !== 'NONE') {
+							let promptStr = 'Enter key for network ' + network.ssid + ':';
+							key = window.prompt(promptStr);
+							
+                            // if the user cancelled, then exit back with no action
+							if (!key || key === "") {
+                                this._setClickable();
+                                
+                                return;
+                            }
+							
+							body.encryption = network.encryption;
+							body.key = key;
+						} else {
+							body.encryption = 'none';
+							body.key = 'none';
+						}
+					}
+					
+                    // try to connect, then set the element back to clickable
+					this.loadService('sonnet-rest-service')
+					.then(restService => {
+						return restService.postBackend(
+							null,
+							'settings',
+							operation,
+							body
+						)
+					}).then(() => {
+                        alert(this.alerts.connectToWifi);
+                        
+                        return Promise.resolve();
+                    }).catch(err => {
+                        alert('Error!\n' + err.message);
+                        
+                        return Promise.resolve();
+                    }).then(() => this._setClickable());
+				} else {
+					alert('Network ' + network.ssid + ' cannot be found. Please refresh the Wi-Fi list to see if it is now detectable.')
+                    
+                    this._setClickable();
+				}
+			}
+			
+			selectAvailableNetwork (e) {
+				console.log('dropdown changed');
+				console.log(e);
+			}
+            
+            _computeAuthIcon (network) {
+				if (network.encryption && network.encryption.toUpperCase() !== 'NONE') {
+					return true;
+				}
+				return false;
+			}
+            
+            _connectedTo (network) {
+				if (!this.currentWifi.ssid) return false;
+				
+				let a = network.ssid;
+				let b = this.currentWifi.ssid;
+				if (a === b) return true;
+				else return false;
+			}
+			
+			_computeConnected (network) {
+				// this is for the 'hidden' attribute
+				return !(this._connectedTo(network));
+			}
+			
+			_computeWifiClass (network) {
+				let classes = 'wifi-entry horizontal layout center center-justified';
+				
+				if (this._connectedTo(network)) {
+					classes += ' connected-network';
+				}
+				
+				return classes;
+			}
+			
+			_computeNearbyNetwork (network) {
+				if (network.nearby && !network.saved && network.ssid !== this.currentWifi.ssid) return true;
+				return false;
+			}
+			
+			_computeSavedNetwork (network) {
+				return (network.saved === true);
+			}
+			
+			_filterNetworks (network) {
+				if (network.ssid === '') return false;
+				if (network.saved && !network.nearby) return false;
+				return true;
+			}
+            
+            _onDeleteWifi (e) {
+                e.stopPropagation();
+                this._setUnclickable();
+                
+				let network = e.model.network;
+				
+				let confirmDelete = confirm('Deleting network ' + network.ssid + '. Confirm?');
+				
+                // delete the network, then re-scan and refresh the wifi list
+				if (confirmDelete) {
+					this.loadService('sonnet-rest-service')
+					.then(restService => {
+						return restService.postBackend(
+							null,
+							'settings',
+							'delete-wifi',
+							{ ssid: network.ssid }
+						)
+					}).catch(err => {
+                        alert(err.message);
+                        
+                        return Promise.resolve();
+                    }).then(() => this.wifiScan())
+                    .catch(err => {
+                        console.log(err)
+                        
+                        alert(err.message);
+                        
+                        return Promise.resolve();
+                    }).then(() => this._setClickable());
+				} else this._setClickable();
+			}
+			
+			_onDisconnectFromWifi (e) {
+                this._setUnclickable();
+                
+				this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'settings',
+						'disconnect-wifi',
+						null
+					)
+				}).catch(err => {
+                    console.log(err)
+                    alert(err.message);
+                    return Promise.resolve();
+                }).then(() => {
+                    alert(this.alerts.disconnectWifi);
+                    this._setClickable()
+                });
+			}
+			
+			_onRefreshNearbyWifiNetworks (e) {
+                this._setUnclickable();
+				
+				this.set('scanBtnText', 'Scanning...');
+                
+				this.wifiScan()
+				.catch(err => {
+					alert(err.message);
+					console.log(err)
+					return Promise.resolve();
+				}).then(() => {
+					this.set('scanBtnText', 'Refresh');
+					
+                    this._setClickable();
+				});
+			}
+            
+            _sortNetworks (netA, netB) {
+				// current at the top
+				if (netA.ssid === this.currentWifi.ssid) return -1;
+				if (netB.ssid === this.currentWifi.ssid) return 1;
+				
+				// if both are nearby, then sort by saved first
+				if (netA.nearby && netB.nearby) {
+					if (netA.saved && !netB.saved) return -1;
+					if (!netA.saved && netB.saved) return 1;
+				}
+				
+				// sort between nearby and not
+				if (netA.nearby && !netB.nearby) return -1;
+				if (!netA.nearby && netB.nearby) return 1;
+				
+				// now sort nearby ones
+				if (netA.nearby && netB.nearby) return this._sortWifiAlphabetical(netA, netB);
+				
+				// sort saved ones
+				if (netA.saved && netB.saved) return this._sortWifiAlphabetical(netA, netB);
+			}
+			
+			_sortWifiAlphabetical (netA, netB) {
+				if (netA.ssid.toLowerCase() < netB.ssid.toLowerCase()) return -1;
+				return 1;
+			}
+            
+            _setUnclickable () {
+                this.$.container.classList.add('no-click');
+            }
+            
+            _setClickable () {
+                this.$.container.classList.remove('no-click');
+            }
+		}
+		
+		window.customElements.define(SonnetWifiSettings.is, SonnetWifiSettings);
+	</script>
+</dom-module>

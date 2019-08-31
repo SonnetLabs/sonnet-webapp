@@ -1,0 +1,112 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+<dom-module id="sonnet-file-upload">
+    <template>
+    <style>
+    :host {
+        display: inline-block;
+        width: 100%;
+        height: 100%;
+    }
+    #input {
+        width: 75px;
+        height: 75px;
+        opacity: 0;
+        overflow: hidden;
+        position: absolute;
+        z-index: -1;
+        /*position: absolute;
+        filter: alpha(opacity=0);
+        opacity: 0;*/
+    }
+    
+    #input + label {
+        display: inline-block;
+        width: 100%;
+        height: 100%;
+    }
+    
+    
+    </style>
+    
+    
+    <input id="input" name="input" type="file" accept="[[acceptType]]" capture="[[captureType]]"/>
+    <label for="input">
+        <slot></slot>
+    </label>
+</template>
+
+<script>
+'use strict';
+
+class SonnetFileUpload extends Polymer.Element {
+    static get is () {
+        return 'sonnet-file-upload';
+    }
+    
+    static get properties () {
+        return {
+            acceptType: {
+                type: String
+            },
+            captureType: {
+                type: String
+            }
+        };
+    }
+    
+    constructor () {
+        super();
+    }
+    
+    ready () {
+        super.ready();
+    }
+    
+    _checkFileSupport () {
+        if (window.File && window.FileReader && window.FileList && window.Blob) {
+            console.log('File APIs are fully supported by this browser. Wew lad');
+        } else {
+            alert('The File APIs are not fully supported in this browser.');
+        }		
+    }
+    
+    _handleFileUpload (evt, callback) {
+        var files = evt.target.files; // FileList object
+        var uploadedImg = files[0];
+        
+        var reader = new FileReader();
+        this._fileProcessor = this._fileProcessor || this._defaultFileProcessor;
+        reader.onload = (e) => {
+            this._fileProcessor(e.target.result, callback);
+        };
+        
+        reader.readAsDataURL(uploadedImg);
+    }
+    
+    _defaultFileProcessor (dataUrl, callback) {
+        console.log("SonnetFileUpload: This is the default file processor method. If you are not testing, you may want to override this.");
+        console.log("This function will now run the provided callback with the data URL of the uploaded file.");
+        console.log("DataURL:");
+        console.log(dataUrl);
+        
+        callback(dataUrl);
+    }
+    
+    // Public API //
+    // provide a file processor and a callback that will be passed through
+    onInput(fileProcessor, callback) {
+        this._fileProcessor = fileProcessor;
+        this.$.input.addEventListener('change', (event) => {this._handleFileUpload(event, callback)}, false);
+    }
+}
+
+window.customElements.define(SonnetFileUpload.is, SonnetFileUpload);
+</script>
+</dom-module>

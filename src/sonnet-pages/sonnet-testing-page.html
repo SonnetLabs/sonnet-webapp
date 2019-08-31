@@ -1,0 +1,128 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-input.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+
+<link rel="import" href="./sonnet-abstract-page.html" />
+
+<dom-module id="sonnet-testing-page">
+	<template>
+		<style include="iron-flex sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+				-webkit-box-sizing: border-box;
+                box-sizing: border-box;
+				padding-top: 50px;
+				@apply(--layout-horizontal);
+				@apply(--layout-center);
+			}
+
+			sonnet-input {
+				--sonnet-input-bg: #ecf0f1;
+				--sonnet-input-fg: #2c3e50;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			.form-element {
+				margin-bottom: 1em;
+			}
+
+			.form-element:last-child {
+				margin-bottom: 0;
+			}
+
+			sonnet-button {
+				--sonnet-button-fg: #fff;
+				--sonnet-button-bg: #2c3e50;
+			}
+		</style>
+
+		<div id="container" class="flex layout vertical center">
+			<sonnet-button class="form-element" size="large" block on-tap="_onCreateDb">Create DB</sonnet-button>
+			<sonnet-button class="form-element" size="large" block on-tap="_onDeleteDb">Test Hash</sonnet-button>
+			<sonnet-button class="form-element" size="large" block on-tap="_onTestDb">Test DB</sonnet-button>
+			<sonnet-button class="form-element" size="large" block on-tap="_onNewUser">Create User</sonnet-button>
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetTestingPage extends SonnetAbstractPage {
+			static get is () {
+				return 'sonnet-testing-page';
+			}
+
+			static get properties () {
+				return {};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+			}
+
+			_onClose (e) {
+				e.stopPropagation();
+				this.loadPage('sonnet-login-page');
+			}
+
+			_onCreateDb (e) {
+				e.stopPropagation();
+
+				this.loadService('sonnet-storage-service')
+					.then((storageService) => {
+						storageService.createUserDb('test');
+					});
+			}
+
+			_onDeleteDb (e) {
+				e.stopPropagation();
+
+				this.loadService('sonnet-crypto-service')
+					.then((cryptoService) => {
+						cryptoService.hashPassword('test');
+					});
+			}
+
+			_onTestDb (e) {
+				e.stopPropagation();
+
+				this.loadService('sonnet-storage-service')
+					.then((storageService) => {
+						return storageService.dbExists('test');
+					})
+					.then((exists) => {
+						console.log('database exists? ' + exists);
+					});
+			}
+
+			_onNewUser (e) {
+				e.stopPropagation();
+
+				this.loadService('sonnet-session-service')
+					.then((sessionService) => {
+						sessionService.createUser('Boken Lin', 'bokenlin', 'testing');
+					});
+			}
+		}
+
+		window.customElements.define(SonnetTestingPage.is, SonnetTestingPage);
+	</script>
+</dom-module>

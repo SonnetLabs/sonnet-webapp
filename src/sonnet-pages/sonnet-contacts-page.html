@@ -1,0 +1,299 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-input.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+<dom-module id="sonnet-contacts-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+
+			#container sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+				--sonnet-button-fg: #3498db;
+				--sonnet-button-bg: transparent;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			#container {
+				/* padding: 50px 0; */
+			}
+
+			.contact {
+				padding: 10px;
+				color: #2c3e50;
+			}
+			
+			.contact-offline {
+				opacity: 0.3;
+			}
+
+			.contact-icon {
+				height: 44px;
+				width: 44px;
+				margin-right: 5px;
+			}
+
+			.separator {
+				width: 100%;
+				background: #ecf0f1;
+				padding: 10px;
+				color: #2c3e50;
+			}
+
+			#search {
+				padding: 10px;
+			}
+
+			sonnet-input {
+				--sonnet-input-bg: #ecf0f1;
+				--sonnet-input-fg: #2c3e50;
+			}
+			
+			.desktop-wrapper {
+				height: 100%;
+				width: 100%;
+			}
+			
+		
+		</style>
+
+		<div class="page-body flex vertical layout">
+			<div>
+				<sonnet-page-header>
+					<div class="title">Contacts</div>
+					<div slot="right">
+						<sonnet-button on-click="_onAddContact">
+							<iron-icon icon="sonnet:circle-plus"></iron-icon>
+						</sonnet-button>
+					</div>
+				</sonnet-page-header>
+			</div>
+
+			<div id="container" class="flex scrollable">
+				<div id="search">
+					<sonnet-input type="text" placeholder="Search" icon="sonnet:search" icon-position="right" auto-correct="off" auto-capitalize="off" value="{{searchString::input}}"></sonnet-input>
+				</div>
+
+				<dom-repeat items="[[contactList]]" initial-count="10" as="contact" filter="{{_computeSearchFilter(searchString)}}" sort="_sortContactList">
+					<template>
+						<!-- <dom-if if="{{_computeSeparator(contacts, index, searchString)}}">
+							<template>
+								<div class="separator">{{_computeSeparator(contacts, index, searchString)}}</div>
+							</template>
+						</dom-if> -->
+						
+						<dom-if if="{{_computeHideSelf(contact.id)}}">
+							<template>
+								<div class$="[[_computeContactClass(contact.online)]]" on-tap="_onChat">
+									<img class="contact-icon" src$="data:image/png;base64,[[contact.iconUrl]]" />
+									<!-- TODO: name and icon should open contact details -->
+									<div class="contact-name flex">[[contact.name]]</div>
+									<!-- TODO: button should be to open chat -->
+									<sonnet-button>
+										<iron-icon icon="sonnet:speech-bubble"></iron-icon>
+									</sonnet-button>
+								</div>
+							</template>
+						</dom-if>
+					</template>
+				</dom-repeat>
+			</div>
+		</div>
+		
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetContactsPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-contacts-page';
+			}
+
+			static get properties () {
+				return {
+					contacts: {
+						type: Array,
+						value: [],
+						notify: true
+					},
+					contactList: {
+						type: Array,
+						computed: '_computeContactList(contacts, identiconService)'
+					},
+					desktop: {
+						type: Boolean
+					},
+					identiconService: {
+						type: Object,
+						value: null
+					},
+					currentUser: {
+						type: Object,
+						value: {}
+					}
+				};
+			}
+
+			ready () {
+				super.ready();
+
+				this.services = {};
+
+				this.loadService('sonnet-identicon-service')
+					.then((identiconService) => {
+						this.set('identiconService', identiconService);
+					});
+			}
+			
+			_onAddContact () {
+				this.loadPage('sonnet-add-contact-page');
+			}
+
+			_computeSearchFilter (searchString) {
+				if (!searchString) {
+					// set filter to null to disable filtering
+					return null;
+				} else {
+					// return a filter function for the current search string
+					searchString = searchString.toUpperCase();
+					
+					return (contact) => {
+						var name = contact.name.toUpperCase();
+						return name.indexOf(searchString) !== -1;
+					};
+				}
+			}
+
+			_computeSeparator (contacts, index, searchString) {				
+				var letter = null;
+
+				if (index < contacts.length) { // Prevent going out of index...
+					var currentLetter = contacts[index].name.charAt(0).toUpperCase();
+					
+					if (index === 0) {
+						letter = currentLetter;
+					} else {
+						let lastLetter = contacts[index - 1].name.charAt(0).toUpperCase();
+
+						if (lastLetter !== currentLetter) {
+							letter = currentLetter;
+						}
+					}
+
+					// If search, hide all the separator
+					if (searchString) {
+						letter = null;
+					}
+
+					return letter;
+				}
+			}
+			
+			_computeContactClass (bOnline) {
+				var classes = 'contact layout horizontal center';
+				if (bOnline) {
+					classes += ' contact-online';
+				}
+				else {
+					classes += ' contact-offline';
+				}
+				
+				return classes;
+			}
+
+			_computeHideSelf (contactId) {
+				// return true;
+				return (contactId !== this.currentUser.userId);
+			}
+
+			_sortContactList (a, b) {
+				var nameA = a.name.toUpperCase();
+				var nameB = b.name.toUpperCase();
+				
+				if (nameA < nameB) {
+					return -1;
+				}
+				
+				if (nameA > nameB) {
+					return 1;
+				}
+
+				// names must be equal
+				return 0;
+			}
+
+			_onChat (e) {
+				e.stopPropagation();
+				
+				let targetContact = e.model.contact;
+				let messageService;
+				let targetChat;
+				
+				if (targetContact.online) {
+					this.loadService('sonnet-message-service')
+					.then((service) => {
+						messageService = service;
+						// TODO: use the local copy instead
+						// get the chat object
+						return messageService._readChat(targetContact.id)
+					})
+					.then((chat) => {
+						targetChat = chat;
+						// sync the targetchat to the chat page
+						return messageService.loadChat(targetChat);
+					})
+					.then(() => {
+						// load the chat page
+						if (this.desktop) {
+							this.loadPage('sonnet-chats-page');
+						}
+						else {
+							this.loadPage('sonnet-chat-page');
+						}
+						return messageService._setChatReadStatus(targetChat.id, true);
+					})
+				}
+			}
+
+			_onContact (e) {
+				e.stopPropagation();
+				
+				console.log('sonnet-contact-details-page', e.model.contact);
+			}
+
+			_computeContactList (contacts, identiconService) {
+				return contacts.map((contact) => {
+					var newContact = JSON.parse(JSON.stringify(contact));
+
+					if (identiconService) {
+						newContact.iconUrl = identiconService.generateIconUrl(newContact.icon);
+					}
+
+					return newContact;
+				});
+			}
+		}
+
+		window.customElements.define(SonnetContactsPage.is, SonnetContactsPage);
+	</script>
+</dom-module>

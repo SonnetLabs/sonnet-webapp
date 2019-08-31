@@ -1,0 +1,149 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-input.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="./sonnet-abstract-page.html" />
+
+<dom-module id="sonnet-login-page">
+	<template>
+		<style include="iron-flex sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+				background-color: #3e3e3e;
+				@apply(--layout-horizontal);
+				@apply(--layout-center);
+				padding: 25px;
+				-webkit-box-sizing: border-box;
+                box-sizing: border-box;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			#logo {
+				max-width: 100%;
+				width: 128px;
+				height: auto;
+				margin-bottom: 4em;
+			}
+
+			.form-element {
+				margin-bottom: 1em;
+			}
+
+			.form-element:last-child {
+				margin-bottom: 0;
+			}
+
+			#login {
+				--sonnet-button-fg: #fff;
+				--sonnet-button-bg: #f39c12;
+			}
+
+			#register {
+				--sonnet-button-fg: #fff;
+				--sonnet-button-bg: transparent;
+			}
+			
+			sonnet-input {
+				max-width: 500px;
+			}
+		</style>
+
+		<div id="container" class="flex layout vertical center">
+			<img id="logo" class="form-element" src="images/logo-horizontal.png" />
+			<sonnet-input class="form-element" size="large" type="text" placeholder="Username" icon="sonnet:head" auto-capitalize="off" auto-correct="off"icon-position="right" value="{{username}}" on-keydown="_onKeyDown" id="username-input"></sonnet-input>
+			<sonnet-input class="form-element" size="large" type="password" placeholder="Password" icon="sonnet:lock" icon-position="right" value="{{password}}" on-keydown="_onKeyDown" id="password-input"></sonnet-input>
+			<sonnet-button id="login" class="form-element" size="large" block on-tap="_onLogin">Log In</sonnet-button>
+			<sonnet-button id="register" class="form-element" size="large" block on-tap="_onRegister">Register New User</sonnet-button>
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetLoginPage extends SonnetAbstractPage {
+			static get is () {
+				return 'sonnet-login-page';
+			}
+
+			static get properties () {
+				return {};
+			}
+
+			constructor () {
+				super();
+			}
+
+			_onLogin (e) {
+				e.stopPropagation();
+
+				this.loadService('sonnet-session-service')
+				.then((sessionService) => {
+					return sessionService.login(this.username, this.password);
+				})
+				.then(() => {
+					this.set('username', '');
+					this.set('password', '');
+					
+					this.loadPage('sonnet-chats-page');
+					// this.loadPage('sonnet-contacts-page');
+					// this.loadPage('sonnet-settings-page');
+				})
+				.catch((err) => {
+					alert('Invalid username or password!');
+					// access kitchen sink
+					this._checkKitchenSink();
+				});
+			}
+
+			_onRegister (e) {
+				e.stopPropagation();
+				
+				this.loadPage('sonnet-register-page');
+			}
+
+			_onKeyDown (e) {
+				var normalizedEvent = Polymer.dom(e);
+				
+				if (e.which === 13) {
+					if (normalizedEvent.localTarget === this.$['username-input']) {
+						this.$['password-input'].focus();
+					} else if (normalizedEvent.localTarget === this.$['password-input']) {
+						this._onLogin(e);
+					}
+				}
+			}
+
+			_onFocus (e) {
+				setTimeout(() => {
+					this.$['username-input'].focus();
+				}, 0);
+			}
+			
+			_checkKitchenSink () {
+				if (!this.devOptions) {
+					this.devOptions = 0;
+				}
+				this.devOptions++;
+				if (this.devOptions >= 2) {
+					this.loadPage('kitchen-sink');
+					this.devOptions = 0;
+				}
+			}
+		}
+
+		window.customElements.define(SonnetLoginPage.is, SonnetLoginPage);
+	</script>
+</dom-module>

@@ -1,0 +1,147 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+<dom-module id="sonnet-contact-details-page">
+	<template>
+		<style include="iron-flex sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			#container {
+				padding: 50px 0;
+			}
+
+			.contact {
+				padding: 10px;
+			}
+
+			.contact-icon {
+				height: 44px;
+				width: 44px;
+			}
+		</style>
+
+		<div page="contacts">
+			<sonnet-page-header>
+				<div class="title">Contacts</div>
+				<div slot="right">
+					<sonnet-button>
+						<iron-icon icon="sonnet:circle-plus"></iron-icon>
+					</sonnet-button>
+				</div>
+			</sonnet-page-header>
+
+			<div id="container">
+				<dom-repeat items="[[contacts]]" as="contact">
+					<template>
+						<div class="contact layout horizontal center">
+							<img class="contact-icon" src$="data:image/png;base64,[[contact.iconUrl]]" />
+							<div class="contact-name">[[contact.name]]</div>
+						</div>
+					</template>
+				</dom-repeat>
+			</div>
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetContactDetailsPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-contact-details-page';
+			}
+
+			static get properties () {
+				return {
+					contacts: Array
+				};
+			}
+
+			ready () {
+				super.ready();
+
+				// this.set('contacts', [
+				// 	{
+				// 		id: 'aaaaaaaa',
+				// 		name: 'Test User 1',
+				// 		icon: 'l6vqzzfsqSwQ4ciby4bL',
+				// 		created: new Date()
+				// 	},
+				// 	{
+				// 		id: 'bbbbbbbb',
+				// 		name: 'Test User 2',
+				// 		icon: 'IadQtq4MMSFU1xxwFTVS',
+				// 		created: new Date()
+				// 	},
+				// 	{
+				// 		id: 'cccccccc',
+				// 		name: 'Test User 3',
+				// 		icon: 'zQfGbjTDMvqGLoER7xIT',
+				// 		created: new Date()
+				// 	},
+				// 	{
+				// 		id: 'dddddddd',
+				// 		name: 'Test User 4',
+				// 		icon: 'B6qbOphyLpOS4YW7fl0Z',
+				// 		created: new Date()
+				// 	},
+				// 	{
+				// 		id: 'eeeeeeee',
+				// 		name: 'Test User 5',
+				// 		icon: 'ekbQ1ZOrUS87V4TYcTDq',
+				// 		created: new Date()
+				// 	},
+				// 	{
+				// 		id: 'ffffffff',
+				// 		name: 'Test User 6',
+				// 		icon: 'H4q8L26u4Di9a75rKE47',
+				// 		created: new Date()
+				// 	},
+				// 	{
+				// 		id: 'gggggggg',
+				// 		name: 'Test User 7',
+				// 		icon: 'YAdLlrxKD6KgTI6Njf1y',
+				// 		created: new Date()
+				// 	}
+				// ]);
+
+				// this._computeIdenticon();
+			}
+
+			_computeIdenticon (hash) {
+				this.loadService('sonnet-identicon-service')
+					.then((identiconService) => {
+						for (let i = 0; i < this.contacts.length; i++) {
+							this.set('contacts.' + i + '.iconUrl', identiconService.generateIconUrl(this.contacts[i].icon));
+						}
+					});
+			}
+		}
+
+		window.customElements.define(SonnetContactDetailsPage.is, SonnetContactDetailsPage);
+	</script>
+</dom-module>

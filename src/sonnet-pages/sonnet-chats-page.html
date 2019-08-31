@@ -1,0 +1,388 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-chat.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+<dom-module id="sonnet-chats-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			#container {
+				/* padding: 50px 0; */
+			}
+
+			.chat {
+				padding: 10px;
+				color: #2c3e50;
+				border-left: 5px solid transparent;
+			}
+
+			.chat-icon {
+				height: 56px;
+				width: 56px;
+				margin-right: 10px;
+			}
+
+			.chat-name {
+				line-height: 25px;
+			}
+
+			.chat-message {
+				line-height: 25px;
+				color: #7f8c8d;
+			}
+
+			.chat-time {
+				color: #7f8c8d;
+				font-size: 0.9em;
+			}
+			
+			.unread-chat {
+				border-left-color: #2ecc71;
+			}
+			
+			.desktop-chat-log {
+				height: 100%;
+				width: 400px;
+			}
+			
+			.inline-chat {
+				height: 100%;
+				border-left: 1px solid #ecf0f1;
+			}
+			
+			.current-chat {
+				background-color: #e6f2ff;
+			}
+			
+			.desktop-wrapper {
+				height: 100%;
+				width: 100%;
+			}
+		</style>
+		
+		<div class="desktop-wrapper horizontal center layout">
+			<div class$="[[_computeChatsListClass(desktop)]]">
+				<div>
+					<sonnet-page-header>
+						<div slot="left">
+							<sonnet-button>
+								<iron-icon icon="sonnet:search" on-click="_handleClick"></iron-icon>
+							</sonnet-button>
+						</div>
+						<div class="title">Chats</div>
+						<div slot="right">
+							<sonnet-button on-tap="_testMethod">
+								<iron-icon icon="sonnet:plus"></iron-icon>
+							</sonnet-button>
+						</div>
+					</sonnet-page-header>
+				</div>
+				
+
+				<div id="container" class="flex scrollable">
+					<dom-repeat items="{{chats}}" as="chat" sort="_sortChats" observe="timestamp">
+						<template>
+							<div class$="[[_computeChatClass(chat, currentChat, desktop)]]" on-tap="_onChat">
+								<img class="chat-icon" src$="[[_computeIconUrl(chat.icon, identiconService)]]" />
+								<div class="flex">
+									<div class="chat-name">[[chat.name]]</div>
+									<div class="chat-message">[[_computeLastMessage(chat.lastMessage)]]</div>
+								</div>
+								<div class="chat-time">[[_computeTime(chat.timestamp)]]</div>
+							</div>
+						</template>
+					</dom-repeat>
+				</div>
+			</div>
+			
+			<div hidden="{{!desktop}}" class="inline-chat vertical layout flex">
+				<!-- <div class="page-header"> -->
+					<sonnet-page-header>
+						<div class="title">[[currentChat.name]]</div>
+					</sonnet-page-header>
+				<!-- </div> -->
+				<div class="flex">
+					<sonnet-chat
+						id="chat-element"
+						current-user="{{currentUser}}"
+						current-chat="{{currentChat}}"
+						current-chat-log="{{currentChatLog}}"
+						current-chat-members="{{currentChatMembers}}">
+					</sonnet-chat>
+				</div>
+			</div>
+		</div>
+		
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetChatsPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-chats-page';
+			}
+
+			static get properties () {
+				return {
+					chats: {
+						type: Array,
+						value: []
+					},
+					identiconService: {
+						type: Object
+					},
+					desktop: {
+						type: Boolean,
+						observer: '_desktopObserver'
+					},
+					currentUser: {
+						type: Object,
+						value: {}
+					},
+					currentChat: {
+						type: Object,
+						notify: true
+					},
+					currentChatLog: {
+						type: Array,
+						value: []
+					},
+					currentChatMembers: {
+						type: Array,
+						value: []
+					},
+					lastChat: {
+						type: Object
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+
+				this.loadService('sonnet-identicon-service')
+					.then((identiconService) => {
+						this.set('identiconService', identiconService);
+					});
+			}
+			
+			loadChat (chat) {
+				console.log('sonnet-chats-page loadChat')
+				let messageService;
+				this.loadService('sonnet-message-service')
+				.then((service) => {
+					messageService = service;
+					return messageService.loadChat(chat);
+				})
+				.then(() => {
+					this.$['chat-element'].scrollToBottom();
+					if (!this.desktop) {
+						this.loadPage('sonnet-chat-page');
+					}
+					return messageService._setChatReadStatus(chat.id, true);
+				});
+			}
+
+			_handleClick () {
+				this._delegateAction('test action', {
+					test: 'test param'
+				});
+			}
+
+			_onChat (e) {
+				e.stopPropagation();
+				
+				var targetChat = e.model.chat;
+				this.set('lastChat', targetChat);
+				this.loadChat(targetChat);
+			}
+
+			_computeChatClass(chat, currentChat, desktop) {
+				let classes = "chat layout horizontal center";
+				
+				if (chat.read === false) {
+					classes += ' unread-chat';
+				}
+				
+				if (desktop && currentChat.id && chat.id === currentChat.id) {
+					classes += ' current-chat';
+				}
+				
+				return classes;
+			}
+			
+			_computeIconUrl (hash, identiconService) {
+				if (identiconService) {
+					return 'data:image/png;base64,' + identiconService.generateIconUrl(hash);
+				}
+
+				return '';
+			}
+
+			_computeTime (msgDateObj) {
+				// return ('0' + time.getHours()).slice(-2) + ':' + ('0' + time.getMinutes()).slice(-2);
+				
+
+				var now = new Date();
+				var millisecondsPerDay = 86400000.0; // 1000 * 60 * 60 * 24
+				var timestring = '';
+
+			    // date parsing
+			    // I'd love to use locales and the builtin methods but apparently 
+			    // android firefox doesn't support the 'locales' option in .toLocaleDateString
+			    // we will eventually have to translate the labels in the app
+			    // so might as well do it from scratch now then improve the system later
+			    
+			    var msgDate = new Date(msgDateObj).setHours(0,0,0,0);
+			    var nowDate = new Date(now).setHours(0,0,0,0);
+			    // check if on same date
+			    if (msgDate === nowDate) {
+			        // return time in am/pm format
+			        var meridian;
+			        var hours = msgDateObj.getHours();
+			        var minutes = msgDateObj.getMinutes();
+			        if (hours < 12) {
+			            meridian = 'AM';
+			        }
+			        else {
+			            meridian = 'PM';
+			            hours = hours - 12;
+			        }
+			        
+			        if (hours === 0) hours = 12;
+			        
+			        // minutes
+			        if (minutes < 10) {
+			            minutes = '0' + minutes;
+			        }
+			        
+			        timestring = '' + hours + ':' + minutes + ' ' + meridian;
+			        return timestring;
+			    }
+			    else {
+			        var dateDiff = (nowDate - msgDate) / millisecondsPerDay;
+			        var weekdays = [
+			            'Sunday',
+			            'Monday',
+			            'Tuesday',
+			            'Wednesday',
+			            'Thursday',
+			            'Friday',
+			            'Saturday'
+			        ];
+			        if (dateDiff >= 1 && dateDiff < 2) {
+			            return 'Yesterday';
+			        }
+			        else if (dateDiff < 7) {
+			            // console.log('Earlier this week; expect day');
+						return weekdays[msgDateObj.getDay()];
+			        }
+			        else {
+			            timestring = '' + msgDateObj.getFullYear() + '-' + (msgDateObj.getMonth() + 1) + '-' + msgDateObj.getDate();
+						return timestring;
+			        }
+				}
+			}
+			
+			_computeChatsListClass (desktop) {
+				let classes = 'vertical layout';
+				
+				if (desktop) {
+					classes += ' desktop-chat-log';
+				}
+				else {
+					classes += ' page-body flex';
+				}
+				
+				return classes;
+			}
+			
+			_computeLastMessage(lastMessage) {
+				if (lastMessage.type === 'text') {
+					return lastMessage.message;
+				}
+				else if (lastMessage.type === 'image') {
+					return '[Image]';
+				}
+				else if (lastMessage.type === 'location') {
+					return '[Location]';
+				}
+				else {
+					return '[Unknown data type]';
+				}
+			}
+			
+			_testMethod () {
+				console.log('chatsPage._testMethod: showing local chats:');
+				console.log(this.chats);
+			}
+			
+			_sortChats (chatA, chatB) {
+				var diff = chatB.timestamp - chatA.timestamp;
+				// console.log('chatsPage._sortChats: diff:')
+				// console.log(diff);
+				if (diff > 0) {
+					return 1;
+				}
+				else return -1;
+			}
+			
+			_onFocus (e) {
+				if (this.desktop) {
+					this.$['chat-element'].scrollToBottom();
+				 	if (!this.currentChat.id) {
+						this._loadLastChat();
+					}
+				}
+			}
+			
+			_loadLastChat () {
+				if (this.lastChat) {
+					this.loadChat(this.lastChat);
+				}
+				else if (this.chats.length > 0) {
+					let timeSortedChats = this.chats.sort(this._sortChats);
+					this.loadChat(timeSortedChats[0]);
+				}
+			}
+			
+			_desktopObserver(newV, oldV) {
+				if (newV === true) {
+					this._loadLastChat();
+				}
+			}
+		}
+
+		window.customElements.define(SonnetChatsPage.is, SonnetChatsPage);
+	</script>
+</dom-module>

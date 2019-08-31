@@ -1,0 +1,529 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+
+<dom-module id="sonnet-firmware-settings">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+			
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+			}
+			
+			.hidden {
+				display: none;
+			}
+			
+			#container {
+				width: 100%;
+				height: 100%;
+			}
+			
+			/* TODO: put this in sonnet-styles */
+			.updateOverlay {
+				position: fixed;
+				width: 100%;
+				height: 100%;
+				top: 0; 
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background-color: rgba(255,255,255,0.75);
+				z-index: 9999;
+				-webkit-user-select: none; /* Safari */        
+				-moz-user-select: none; /* Firefox */
+				-ms-user-select: none; /* IE10+/Edge */
+				user-select: none; /* Standard */
+				text-align: center;
+			}
+			
+			/* TODO: put in sonnet-styles */
+			.settings-entry, .settings-button {
+				height: 50px;
+			}
+
+			/* TODO: put in sonnet-styles */
+			.subtext {
+				font-size: 14px;
+				color: #888888;
+			}
+			
+			/* TODO: put in sonnet-styles */
+			.no-horizontal-padding {
+				padding-left: 0;
+				padding-right: 0;
+			}
+			
+			.firmware-update-info-container {
+				margin-right: 10px;
+			}
+		</style>
+		
+		<div id="container" class="flex vertical layout">
+			<div hidden="{{!firmwareUpdateInProgress}}" class="updateOverlay vertical center-justified layout center">
+				<div>
+					[[_computeFirmwareBeingUpdatedText(firmwareBeingUpdated)]] Update in Progress
+				</div>
+			</div>
+			
+			<div id="content" class="sub-entry">
+				<dom-repeat items="[[firmwares]]" as="firmware">
+					<template>
+						<div class="settings-entry horizontal center-justified layout" on-click="upgrade">
+							<div class="flex vertical center-justified layout">
+								<div>
+									[[firmware.name]]
+								</div>
+								<div class="subtext">
+									[[firmware.version]]
+								</div>
+							</div>
+							<div class="firmware-update-info-container vertical center-justified layout end">
+								<div>
+									[[firmware.status]]
+								</div>
+								<div class="subtext">
+									[[firmware.subtext]]
+								</div>
+							</div>
+						</div>
+					</template>
+				</dom-repeat>
+				<div>
+					<sonnet-button size="small" on-tap="_onRefreshFirmware" on-click="_onRefreshFirmware" class="no-horizontal-padding">[[refreshText]]</sonnet-button>
+				</div>
+			</div>
+		</div>
+		
+	</template>
+	
+	<script>
+		'use strict';
+		
+		class SonnetFirmwareSettings extends Polymer.Element {
+			static get is () {
+				return 'sonnet-firmware-settings';
+			}
+			
+			static get properties () {
+				return {
+					firmwareTypes: {
+						type: Array,
+						value: [
+							'application',
+							'mesh',
+							'system'
+						]
+					},
+					firmwares: {
+						type: Array,
+						value: [
+							{
+								name: 'Application',
+								type: 'application',
+								version: 'Checking...',
+								subtext: '',
+								status:'',
+								updateAvailable: false
+							},
+							{
+								name: 'Mesh',
+								type: 'mesh',
+								version: 'Checking...',
+								subtext: '',
+								status:'',
+								updateAvailable: false
+							},
+							{
+								name: 'System',
+								type: 'system',
+								version: 'Checking...',
+								subtext: '',
+								status:'',
+								updateAvailable: false
+							}
+						]
+					},
+					firmwareBeingUpdated: {
+						type: String,
+						value: ''
+					},
+					firmwareUpdateError: {
+						type: Boolean,
+						value: false
+					},
+					firmwareStatusPollIntervalMs: {
+						type: Number,
+						value: 5000
+					},
+					firmwareUpdateInProgress: {
+						type: Boolean,
+						value: false,
+						observer: '_onFirmwareUpdateInProgressObserver'
+					},
+					refreshText: {
+						type: String,
+						value: 'Check for updates'
+					}
+				};
+			}
+			
+			constructor () {
+				super();
+			}
+			
+			ready () {
+				super.ready();
+				
+				this.loadService = SonnetApp.instance.loadService.bind(SonnetApp.instance);
+				this.loadPage = SonnetApp.instance.loadPage.bind(SonnetApp.instance);
+			}
+			
+			getInstalledFirmwares () {
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'settings',
+						'get-installed-firmware-versions',
+						null
+					);
+				}).then(firmwareVersions => {
+					let foundUpdateError = false;
+					
+					for (let i = 0; i < this.firmwareTypes.length; i++) {
+						let oldFwObj = this.firmwares[i];
+						let fwType = this.firmwareTypes[i];
+						let newFwObj = firmwareVersions[fwType];
+						
+						let newArrObj = {
+							version: newFwObj.version
+						};
+						
+						// if there was an error, mark it
+						let firmwareUpdateError = (newFwObj.status === 'error');
+						
+						if (firmwareUpdateError) {
+							newArrObj.status = 'Error';
+							newArrObj.subtext = newFwObj.details;
+							foundUpdateError = true;
+						} // else if something just finished installing, we can clear it
+						// eg. MCU was flashed and they reopen the settings page
+						else if (newFwObj.status === '' && oldFwObj.version !== newFwObj.version) {
+							newArrObj.status = '';
+							newArrObj.subtext = '';
+						}
+						
+						this._updateArrayObject('firmwares', i, newArrObj);
+					}
+					
+					this.set('firmwareUpdateError', foundUpdateError);
+					
+					this.notifySplices('firmwares');
+					
+					this._firmwareCheckPollStatus(firmwareVersions);
+					
+					return Promise.resolve();
+				});
+			}
+			
+			getFirmwareInfo () {
+				return this.getInstalledFirmwares()
+				.catch(err => {
+					console.log(err)
+					return Promise.resolve();
+				}).then(this.getLatestFirmwares.bind(this))
+				.catch(err => {
+					return Promise.reject(err)
+				});
+
+			}
+			
+			getLatestFirmwares () {
+				let setStatusText = (text) => {
+					for (let i = 0; i < this.firmwareTypes.length; i++) {
+						this._updateArrayObject('firmwares', i, {
+							status: text,
+							subtext: '',
+							updateAvailable: false
+						});
+					}
+					
+					this.notifySplices('firmwares');
+				}
+				
+				let defaultText = 'Checking for updates...';
+				
+				setStatusText(defaultText);
+				
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'settings',
+						'get-latest-firmware-versions',
+						null
+					);
+				}).then(latestFirmwares => {
+					for (let i = 0; i < this.firmwareTypes.length; i++) {
+						let firmware = this.firmwares[i];
+						let firmwareType = this.firmwareTypes[i];
+						
+						let updateAvailable = latestFirmwares[firmwareType].updateAvailable;
+						
+						// compute the status text
+						let statusText, subtext;
+						if (latestFirmwares[firmwareType].latest === '') {
+							statusText = 'Firmware server error';
+							subtext = ''
+						} else if (updateAvailable) {
+							statusText = 'Update available!';
+							subtext = latestFirmwares[firmwareType].latest;
+						} else {
+							statusText = 'Up to date!'
+							subtext = '';
+						} 
+						
+						this._updateArrayObject('firmwares', i, {
+							subtext: subtext,
+							status: statusText,
+							updateAvailable: updateAvailable
+						});
+					}
+					// required to actually make polymer rerender
+					this.notifySplices('firmwares');
+				
+					
+					return Promise.resolve();
+				}).catch(err => {
+					setStatusText('Error checking for updates');
+					
+					return Promise.reject(err)
+				});
+			}
+			
+			upgrade (e) {
+				let firmware = e.model.firmware;
+				
+				// TODO: implement this with the backend later
+				// if (firmware.updateAvailable) {
+				if (true) {	// COMBAK: testing only!
+					// TODO: add a confirm here
+					if (window.confirm('Update ' + firmware.type + '?')) {
+						// disable clicking until the request returns
+						this.$.content.classList.add('no-click');
+						
+						this.loadService('sonnet-rest-service')
+						.then(restService => {
+							return restService.postBackend(
+								null,
+								'settings',
+								'upgrade',
+								{
+									fwType: firmware.type,
+									tag: 'stable'	// TEMP: only stable for now
+								}
+							);
+						}).then(() => {
+							return this.getInstalledFirmwares();
+						}).catch(err => {
+							alert('Software upgrade failed. Reason:\n' + err.message);
+							console.log(err.message);
+							return Promise.resolve();
+						}).then(() => {
+							this.$.content.classList.remove('no-click');
+						});
+					}
+				}
+			}
+			
+			_onRefreshFirmware (e) {
+				this.$.content.classList.add('no-click');
+				this.set('refreshText', 'Checking...')
+				
+				this.getFirmwareInfo()
+				.catch(err => {
+					alert(err);
+					return Promise.resolve();
+				}).then(() => {
+					this.$.content.classList.remove('no-click');
+					this.set('refreshText', 'Check for updates')
+				});
+			}
+			
+			_computeFirmwareBeingUpdatedText(firmwareBeingUpdated) {
+				let text = firmwareBeingUpdated;
+				if (text && text.length > 0) {
+					return text.charAt(0).toUpperCase() + text.slice(1);
+				}
+				return '';
+			}
+			
+			_firmwareGetUpdateType (firmwareStatus) {
+				for (let key in firmwareStatus) {
+					if (firmwareStatus.hasOwnProperty(key)) {
+						let status = firmwareStatus[key].status;
+						
+						let isIncomplete = (status.indexOf('incomplete') !== -1);
+						if (isIncomplete) {	
+							console.log(key, status)
+							
+							for (let i = 0; i < this.firmwares.length; i++) {
+								let firmware = this.firmwares[i];
+								
+								if (firmware.type === key) {
+									return firmware.type;
+								}
+							}
+						}
+					}
+				}
+				return null;
+			}
+			
+			_firmwareCheckPollStatus (firmwareStatus) {
+				console.log('_firmwareCheckpollstatus')
+				
+				// check if there's a firmware being updated
+				let firmwareBeingUpdated = this._firmwareGetUpdateType(firmwareStatus);
+				
+				// if so, keep going
+				if (firmwareBeingUpdated !== null) {
+					console.log('has pollable status, checking status interval')
+					
+					this.set('firmwareUpdateInProgress', true);
+					this.set('firmwareBeingUpdated', firmwareBeingUpdated);
+					
+					// double check if there's already a poll going
+					if (this.firmwareStatusInterval === null) {
+						console.log('setting status interval')
+						
+						this.set('firmwareStatusInterval', setInterval(() => {
+							this.getInstalledFirmwares()
+							.catch(err => {
+								console.log(err);
+							});
+						}, this.firmwareStatusPollIntervalMs));
+					} else { console.log('interval is already set up') }
+				} else {
+					// deactivate the poll
+					this.set('firmwareUpdateInProgress', false);
+					console.log('does not have pollable status, clearing status interval');
+					
+					this._firmwareClearStatusInterval();
+				}
+			}
+			
+			_firmwareClearStatusInterval () {
+				clearInterval(this.firmwareStatusInterval);
+				this.set('firmwareStatusInterval', null);
+			}
+			
+			_getFwObj (targetType) {
+				for (let i = 0; i < this.firmwares.length; i++) {
+					let fwType = this.firmwares[i].type;
+					
+					if (fwType === targetType) {
+						return this.firmwares[i];
+					}
+				}
+				
+				return null
+			}
+			
+			_onFirmwareUpdateInProgressObserver (newV, oldV) {
+				// when the firmware update is done, check for the latest again
+				// so that it will automatically update the firmware status to say 'Up to date!'
+				// or if theres an even newer version available somehow, it will say it too
+				// but, do not try and check the update again if there was an error
+				// need to display the error in the status+subtext fields
+				if (oldV === true && newV === false && !this.firmwareUpdateError) {
+					switch (this.firmwareBeingUpdated) {
+						case 'application':
+							// set the status text to 'Updated' or something
+							// one-off, it will be reset on page reload or firmware refresh
+							let oldObj = this._getFwObj(this.firmwareBeingUpdated);
+							
+							this._updateFwObj(this.firmwareBeingUpdated, {
+								status: 'Installed!',
+								subtext: oldObj.version,
+								updateAvailable: false
+							});
+							
+							alert('The application update was installed. The server and Wi-Fi will restart in a few seconds.\n\nPlease rejoin your device to the Sonnet\'s Wi-Fi when it reappears.');
+							break;
+						case 'mesh':
+							alert('The Sonnet will flash the mesh unit. The server will stop and restart. The connection will be re-established in a few minutes.')
+							this._updateFwObj(this.firmwareBeingUpdated, {
+								status: 'Flashing MCU',
+								subtext: 'Service will be restored after flashing.',
+								updateAvailable: false
+							});
+							break;
+						case 'system':
+							alert('The Sonnet will turn off after updating the operating system.\n\nPlease power it on 10 seconds after the LED turns off.')
+							this._updateFwObj(this.firmwareBeingUpdated, {
+								status: 'Downloading and installing',
+								subtext: 'Service unavailable.',
+								updateAvailable: false
+							});
+							break;
+						default:
+							alert('Unrecognized firmware type has finished updating: ' + this.firmwareBeingUpdated)
+							return
+					}
+				}
+			}
+			
+			// TODO: this may be useful to put in the sonnet app or some other base element
+			// shorthand for updating an array object
+			// meant to be called within a for loop
+			// still requires you to call notify splices after it's all done
+			_updateArrayObject(array, index, fields) {
+				let newObj = {};
+				let orig = this[array][index];
+				
+				// copy original fields
+				for (let key in orig) {
+					if (orig.hasOwnProperty(key)) {
+						newObj[key] = orig[key];
+					}
+				}
+				
+				// update the obj
+				for (let key in fields) {
+					if (fields.hasOwnProperty(key)) {
+						newObj[key] = fields[key];
+					}
+				}
+				
+				// splice it into array
+				this[array].splice(index, 1, newObj);
+			}
+			
+			_updateFwObj (targetType, newObj) {
+				for (let i = 0; i < this.firmwareTypes.length; i++) {
+					let fwType = this.firmwareTypes[i];
+					
+					if (fwType === targetType) {
+						this._updateArrayObject('firmwares', i, newObj);
+					}
+				}
+				this.notifySplices('firmwares');
+			}
+		}
+		
+		window.customElements.define(SonnetFirmwareSettings.is, SonnetFirmwareSettings);
+	</script>
+</dom-module>

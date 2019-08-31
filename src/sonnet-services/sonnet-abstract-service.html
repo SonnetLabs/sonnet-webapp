@@ -1,0 +1,61 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../sonnet-app/sonnet-app.html" />
+
+<dom-module id="sonnet-abstract-service">
+	<template>
+		<style>
+			:host {
+				display: none;
+			}
+		</style>
+	</template>
+	<script>
+		'use strict';
+
+		class SonnetAbstractService extends Polymer.Element {
+			static get is () {
+				return 'sonnet-abstract-service';
+			}
+
+			static get properties () {
+				return {
+					serviceId: {
+						type: String,
+						reflectToAttribute: true
+					}
+				};
+			}
+
+			constructor () {
+				super();
+
+				if (this.constructor === SonnetAbstractService) {
+					throw new TypeError('Cannot construct Abstract instances directly');
+				}
+
+				// Set the "service-id" attribute for future identification
+				this.set('serviceId', this.constructor.is);
+
+				this.loadService = SonnetApp.instance.loadService.bind(SonnetApp.instance);
+				this.loadPage = SonnetApp.instance.loadPage.bind(SonnetApp.instance);
+
+				SonnetApp.instance.registerService(this.serviceId, new Promise ((resolve) => {
+					this._serviceResolve = resolve;
+				}));
+			}
+
+			ready () {
+				super.ready();
+
+				this._serviceResolve(this);
+			}
+		}
+
+		SonnetAbstractService._services = {};
+
+		window.customElements.define(SonnetAbstractService.is, SonnetAbstractService);
+	</script>
+</dom-module>

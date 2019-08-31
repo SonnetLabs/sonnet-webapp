@@ -1,0 +1,314 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<link rel="import" href="../../bower_components/iron-ajax/iron-request.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+<link rel="import" href="../sonnet-elements/sonnet-map-list.html" />
+
+<dom-module id="sonnet-map-service">
+	<template>
+	</template>
+	<script>
+		'use strict';
+		
+		class SonnetMapService extends SonnetAbstractService {
+
+			static get is () {
+				return 'sonnet-map-service';
+			}
+
+			static get properties () {
+				return {
+					endpoints: {
+						type: Object,
+						value: function () {
+								return {
+								assets: "https://app.sonnetlabs.com/maps/assets"
+							}
+						}
+					},
+					regionList: {
+						type: Array,
+						value: [],
+						notify: true
+					},
+					mapStatus: {
+						type: Object,
+						value: {},
+						notify: true
+					},
+					mapRegions: {
+						type: Array,
+						value: [],
+						notify: true
+					},
+					sdMounted: {
+						type: Boolean,
+						notify: true
+					},
+					statusPollIntervalMs: {
+						type: Number,
+						value: 5000
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+				this.loadService('sonnet-session-service')
+				.then(sessionService => {
+					sessionService.addEventListener('login', this._loginHandler.bind(this));
+				});
+				
+				this.set('statusInterval', null);
+			}
+			
+			_getRegionList () {
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.getUrl(this.endpoints.assets + '/regions.json');
+				}).then(regionList => {
+					this.set('regionList', regionList);
+					// console.log(regionList)
+					this._springer();
+					return Promise.resolve(regionList);
+				}).catch(err => {
+					console.log(err);
+					return Promise.reject(err);
+				});
+			}
+			
+			// given a location object, returns the id of the first map that contains it
+			// or rejects if not found
+			pointInInstalledMaps (locationInfo) {
+				// check if the SD card is loaded
+                
+                return this.checkSdMount()
+				.then(mounted => {
+                    if (mounted) {
+                        return this.getInstalledBoundingBoxes();
+                    } else {
+                        return Promise.reject('Cannot read SD card.')
+                    }
+                }).then(boundingBoxes => {
+                    // search through each region's bounding box, see if we're contained in there
+                    // if not found, found = false (as initialized)
+                    
+                    for (let i = 0; i < boundingBoxes.length; i++) {
+                        if (this._pointInRegion(boundingBoxes[i].bounds, locationInfo)) {
+                            let targetRegion = boundingBoxes[i].id;
+							
+                            return Promise.resolve(targetRegion)
+                        }
+                    }
+					
+					return Promise.reject('Cannot find ' + locationInfo.latitude + ', ' + locationInfo.longitude + ' in installed maps.');
+                }).catch(err => Promise.reject(err));
+			}
+			
+			getInstalledBoundingBoxes () {
+				// TODO: call the backend and get an object that has region names and bounding boxes
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'device',
+						'get-installed-map-bounds',
+						null
+					);
+				});
+			}
+			
+			getMapStatus () {
+				console.log('getMapStatus');
+				return this.checkSdMount()
+				.then(mounted => {
+					if (mounted) return this.loadService('sonnet-rest-service')
+					else {
+						this.set('mapStatus', {})
+						return Promise.reject(new Error('SD card not inserted or readable by filesystem.'))
+					}
+				}).then(restService => {
+					return restService.postBackend(
+						null,
+						'device',
+						'get-map-status',
+						null
+					);
+				}).then(mapStatus => {
+					this.set('mapStatus', mapStatus);
+					console.log('mapStatus', this.mapStatus)
+					this._checkPollStatus(mapStatus);
+					
+					return Promise.resolve(mapStatus);
+				}).catch(err => {
+					// COMBAK: comment these out for now
+					// if there's an error, the device may be busy while downloading/installing
+					// and refuse to fork a new process just to check uci configs, etc.
+					// this is hacky but until we figure out how to prevent the system from thinking
+					// it's running out of memory (eg. swap), this is the best we got
+					// this.set('mapStatus', {});
+					// this._clearStatusInterval();
+					console.log(err);
+					return Promise.reject(err);
+				});
+			}
+			
+			checkSdMount () {
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null, 
+						'device',
+						'check-sd-mount',
+						null
+					);
+				}).then(response => {
+					if (response.mounted) {
+						this.set('sdMounted', true);
+					} else {
+						this.set('sdMounted', false);
+					}
+					
+					return Promise.resolve(this.sdMounted);
+				}).catch(err => {
+					console.log(err);
+					this.set('sdMounted', false);
+					return Promise.reject(err);
+				});
+			}
+			
+			// sync these with the definitions in the backend
+			mapIsInstalled (id) {
+				if (this.mapStatus.hasOwnProperty(id) && this.mapStatus[id] === "install-complete") return true;
+				else return false;
+			}
+			
+			mapIsDownloaded (id) {
+				if (this.mapStatus.hasOwnProperty(id) && this.mapStatus[id] === "dl-complete") return true;
+				else return false;
+			}
+			
+			_sublevelFromId (id) {
+				return id.split('_').length - 1;
+			}
+			
+			_loginHandler () {
+				return this._getRegionList()
+				.then(regionList => this.getMapStatus())
+				.catch(err => {
+					console.log(err);
+				});
+			}
+			
+			_parentFromId (id) {
+				if (this._sublevelFromId(id) > 0) {
+					let separated = id.split('_');
+					separated.pop();
+					return separated.join('_');
+				} else return null;
+			}
+			
+			// find whether a long/lat coord is within a bounding box given by two corners
+			_pointInRegion (boundingBox, locationInfo) {
+				// given in form "long1,lat1,long2,lat2", ie. x1,y1,x2,y2
+				
+				let xMin = Math.min(boundingBox[0], boundingBox[2])
+				let xMax = Math.max(boundingBox[0], boundingBox[2])
+				
+				let yMin = Math.min(boundingBox[1], boundingBox[3])
+				let yMax = Math.max(boundingBox[1], boundingBox[3])
+				
+				let withinX = (xMin < locationInfo.longitude && locationInfo.longitude < xMax);
+				let withinY = (yMin < locationInfo.latitude && locationInfo.latitude < yMax);
+				
+				return (withinX && withinY)
+			}
+			
+			_springer () {
+				console.log('_springer')
+				let mapRegions = [];
+				
+				for (let p = 0; p < this.regionList.length; p++) {
+					let guest = {
+						name: this.regionList[p][0],
+						id: this.regionList[p][1],
+						sublevel: this._sublevelFromId(this.regionList[p][1]),
+						parent: null,
+						hasChildren: false 
+					};
+					
+					for (let c = 0; c < this.regionList.length; c++) {
+						if (p === c) continue;	// you can't be your own parent or child!
+						else {
+							let possibleRelative = this.regionList[c];
+							let relativeId = possibleRelative[1];
+							let relativeSublevel = this._sublevelFromId(relativeId);
+							
+							// first check if the relative is the parent
+							if (guest.sublevel > 0 && guest.sublevel > relativeSublevel) {
+								let guestParent = this._parentFromId(guest.id);
+								if (relativeId === guestParent) {
+									guest.parent = relativeId;
+								}
+							}
+							// if not, check if the relative is a child 
+							else if (guest.sublevel < relativeSublevel 
+								&& guest.id === this._parentFromId(relativeId)) {
+								
+								guest.hasChildren = true;
+							}
+							
+							// if we've found both the guest's parent and if the guest has children, we can skip the rest
+							if (guest.parent && guest.hasChildren) break;
+						}
+					}
+					mapRegions.push(guest);
+				} // done checking regions for parents and children
+				this.set('mapRegions', mapRegions);
+				// console.log(this.mapRegions);
+			}
+			
+			_hasPollableStatus (mapStatus) {
+				for (let key in mapStatus) {
+					if (mapStatus.hasOwnProperty(key)) {
+						let status = mapStatus[key];
+						
+						let isIncomplete = (status.indexOf('incomplete') !== -1);
+						if (isIncomplete) {
+							console.log(key, status)
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+			
+			_checkPollStatus (mapStatus) {
+				if (this._hasPollableStatus(mapStatus)) {
+					if (this.statusInterval === null) {
+						this.set('statusInterval', setInterval(() => {
+							this.getMapStatus()
+							.catch(err => {
+								console.log(err);
+							});
+						}, this.statusPollIntervalMs));
+					}
+				} else {
+					this._clearStatusInterval();
+				}
+			}
+			
+			_clearStatusInterval () {
+				clearInterval(this.statusInterval);
+				this.set('statusInterval', null);
+			}
+		}
+
+		window.customElements.define(SonnetMapService.is, SonnetMapService);
+	</script>
+</dom-module>

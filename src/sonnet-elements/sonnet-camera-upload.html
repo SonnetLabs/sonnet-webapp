@@ -1,0 +1,213 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-image-processor.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+<dom-module id="sonnet-camera-upload">
+    <template>
+        <style include="sonnet-image-processor">
+        :host {
+            display: inline-block;
+            height: 100%;
+            width: 100%;
+        }
+        
+        .input-container {
+            /* position: relative; */
+            height: 100%;
+            width: 100%;
+        }
+        
+        </style>
+
+        <div class="input-container" on-click="_onClick">
+            <slot></slot>
+        </div>
+    </template>
+
+<script>
+'use strict';
+
+class SonnetCameraUpload extends SonnetImageProcessor {
+    static get is () {
+        return 'sonnet-camera-upload';
+    }
+    
+    // some new custom properties different from sonnet-image-upload
+    
+    static get properties () {
+        return {
+            crop: {
+                type: Boolean,
+                value: false
+            },
+            
+            cropConfig : {
+                type: Object,
+                value: function () {
+                    return {
+                        x: 100,
+                        y: 100
+                    }
+                }
+            },
+            
+            scale: {
+                type: Boolean,
+                value: false
+            },
+            
+            scaleRatio: {
+                type: Number,
+                value: 1
+            },
+            disabled: {
+                type: Boolean,
+                value: false,
+                reflectToAttribute: true
+            },
+            quality: {
+                type: Number,
+                value: 100  // 0 - 100; see https://cordova.apache.org/docs/en/latest/reference/cordova-plugin-camera/index.html#module_camera.CameraOptions
+            }
+        };
+    }
+    
+    constructor () {
+        super();
+    }
+    
+    ready () {
+        super.ready();
+    }
+    
+    _onClick (e) {
+        // TODO: return error if not native ios/android
+        let options = this._setCameraOptions();
+        console.log(options)
+        
+        navigator.camera.getPicture(
+            (raw) => {
+                this._handleFileUpload(raw);
+            }, 
+            (err) => {
+                console.log('sonnet-camera-upload: navigator.camera.getPicture err')
+                console.log(err);
+            },
+            options
+        );
+    }
+
+   _checkFileSupport () {
+       if (window.File && window.FileReader && window.FileList && window.Blob) {
+           console.log('File APIs are fully supported by this browser. Wew lad');
+       } else {
+           alert('The File APIs are not fully supported in this browser.');
+       }       
+   }
+   
+   _dispatchUploadEvent (data) {
+       this.dispatchEvent(new CustomEvent('sonnet-image-upload', {
+           detail: data   // TODO: convert to b64 on non-browsers
+       }));
+   }
+   
+   _handleFileUpload (fileThing) {
+       // takes either a b64 data url (browser) or a file uri (iOS/android)
+       
+       // TODO: for now assume jpeg, but we'll potentially have to handle + detect other filetypes
+       // users may not like it if we restrict the file upload to jpeg only,
+       // but we'll take care of that later
+       let source = fileThing;
+       
+       var imgObject = new Image();
+       // TODO: move crop and scale params to _setCameraOptions
+       if (this.crop) {
+           console.log("returning cropped image");
+       
+           imgObject.onload = (e) => {
+               console.log('image loaded')
+               // done loading, process
+               let base64Img = this._cropToB64(imgObject, this.cropConfig.x, this.cropConfig.y);
+       
+               this._dispatchUploadEvent(base64Img);
+           };
+       
+           imgObject.src = source;
+       }
+       else if (this.scale) {
+           console.log('returning scaled image')
+           imgObject.onload = (e) => {
+               console.log('image loaded')
+               
+               // done loading, process
+               let base64Img = this._scaleImage(imgObject, this.scaleRatio);
+
+               this._dispatchUploadEvent(base64Img);
+           };
+           
+           imgObject.src = source;
+       }
+       else {
+           // if device is not browser, you still need to return b64
+           console.log("returning raw image");
+           let platform = this.device.platform.toLowerCase();
+           // will be a file URI pointing to some asset in local fs/cache
+           let xhr = new XMLHttpRequest();
+           // http request to get a blob
+           xhr.onload = () => {
+               let reader = new FileReader();
+               
+               // dispatch event with b64
+               reader.onloadend = () => {
+                   this._dispatchUploadEvent(reader.result);
+               }
+               
+               // read the blob to get a b64
+               reader.readAsDataURL(xhr.response);
+           };
+           
+           xhr.open('GET', source);
+           xhr.responseType = 'blob';
+           xhr.send();
+           
+           // TODO: iOS cleanup
+       }
+   }
+   
+   _onClick (e) {
+       let options = this._setCameraOptions();
+       console.log(options)
+       
+       navigator.camera.getPicture(
+           (raw) => {
+               this._handleFileUpload(raw);
+           }, 
+           function onerr(err) {
+               alert(err);
+           },
+           options
+       );
+   }
+   
+   _setCameraOptions () {
+       var options = {
+           quality: this.quality,
+           destinationType: Camera.DestinationType.FILE_URI,   // TODO: investigate cache buildup/cleanup if we use FILE_URI or NATIVE_URI: https://cordova.apache.org/docs/en/latest/reference/cordova-plugin-camera/index.html#cameradestinationtype--enum
+           encodingType: Camera.EncodingType.JPEG,
+           mediaType: Camera.MediaType.PICTURE,
+           sourceType: Camera.PictureSourceType.CAMERA, // has some quirks re: image modifications ; see https://cordova.apache.org/docs/en/latest/reference/cordova-plugin-camera/index.html#module_Camera.PictureSourceType
+           correctOrientation: true  //Corrects Android orientation quirks
+       }
+       
+       return options;
+   }
+}
+
+window.customElements.define(SonnetCameraUpload.is, SonnetCameraUpload);
+</script>
+</dom-module>

@@ -1,0 +1,117 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+
+<dom-module id="sonnet-crypto-service">
+	<script>
+		'use strict';
+		
+		class SonnetCryptoService extends SonnetAbstractService {
+
+			static get hashPool () {
+				return 'abcdefghijklmnopqrstuvwxyz1234567890';
+			}
+
+			static get hexHashPool () {
+				return '0123456789abcdef';
+			}
+
+			static get salt () {
+				return 'PgE4Sad7xyu8BBPB';
+			}
+
+			static get is () {
+				return 'sonnet-crypto-service';
+			}
+
+			static get properties () {
+				return {
+					serviceName: {
+						type: String,
+						value: 'cryptoService'
+					}
+				};
+			}
+
+			constructor () {
+				super();
+
+				if (!window.crypto.subtle) {
+					window.crypto.subtle = window.crypto.webkitSubtle;
+				}
+			}
+
+			generateId (length, hex) {
+				length = length || 8;
+				hex = hex || false;
+
+				var random = new Uint32Array(length);
+				window.crypto.getRandomValues(random);
+
+				var hash = '';
+
+				var hashPool = hex ? SonnetCryptoService.hexHashPool : SonnetCryptoService.hashPool;
+
+				// Loop through each random number
+				for (let i = 0; i < random.length; i++) {
+					let randomNumber = random[i] / 4294967296;
+					hash += hashPool[Math.floor(randomNumber * hashPool.length)];
+				}
+
+				return hash;
+			}
+
+			hashPassword (password) {
+				return new Promise((resolve, reject) => {
+					var passwordBuf = this._strToBuf(SonnetCryptoService.salt + password);
+
+					window.crypto.subtle.digest(
+						{
+							name: 'SHA-256',
+						},
+						passwordBuf
+					)
+					.then((hash) => {
+						resolve(this._bufToHex(hash));
+					})
+					.catch(function (err) {
+						console.log(err);
+						return reject(err);
+					});
+				});
+			}
+
+			_bufToStr (buf) {
+				return String.fromCharCode.apply(null, new Uint16Array(buf));
+			}
+
+			_strToBuf (str) {
+				var buf = new ArrayBuffer(str.length * 2); // 2 bytes for each char
+				var bufView = new Uint16Array(buf);
+				for (var i = 0, strLen = str.length; i < strLen; i++) {
+					bufView[i] = str.charCodeAt(i);
+				}
+				return buf;
+			}
+
+			_bufToHex (buf) {
+				return Array.prototype.map.call(new Uint8Array(buf), x => ('00' + x.toString(16)).slice(-2)).join('');
+			}
+
+			_bufToBase64 (buf) {
+				var binary = '';
+				var bytes = new Uint8Array(buf);
+				var len = bytes.byteLength;
+				
+				for (let i = 0; i < len; i++) {
+					binary += String.fromCharCode(bytes[i]);
+				}
+
+				return window.btoa(binary);
+			}
+		}
+
+		window.customElements.define(SonnetCryptoService.is, SonnetCryptoService);
+	</script>
+</dom-module>

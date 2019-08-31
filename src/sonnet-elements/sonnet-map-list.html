@@ -1,0 +1,352 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../sonnet-app/sonnet-app.html" />
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-input.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+<link rel="import" href="../sonnet-elements/sonnet-image-upload.html" />
+
+<dom-module id="sonnet-map-list">
+    <template>
+        <style include="iron-flex iron-flex-alignment sonnet-styles">
+            :host {
+                display: block;
+                height: 100%;
+                width: 100%;
+            }
+            
+            .region-entry {
+                height: 50px;
+				padding-left: 10px;
+			}
+            
+            .region-entry:not(:last-child) {
+                border-bottom: 1px solid #aaaaaa;
+            }
+            
+            .region-text {
+                height: 100%;
+            }
+            
+            .icon-button {
+                height: 50px;
+                width: 50px;
+            }
+            
+            .icon-container {
+                background-size: 100%;
+                height: 24px;
+                width: 24px;
+            }
+            
+            .back-div {
+                height: 50px;
+                border-bottom: 1px solid #aaaaaa;
+            }
+            
+            .narrow-icon-button {
+                height: 50px;
+                margin-left: 10px;
+                margin-right: 10px;
+            }
+            
+            .subtext {
+				font-size: 12px;
+				color: #888888;
+			}
+            
+            #container {
+                width: 100%;
+                height: 100%;
+            }
+            
+            .full-size {
+                width: 100%;
+                height: 100%;
+            }
+            
+            .absent {
+                fill: currentColor;
+                background: url("../../images/inbox.svg") no-repeat;
+            }
+            
+            .error {
+                fill: red;
+                background: url("../../images/cross.svg") no-repeat;
+                
+            }
+            
+            .incomplete {
+                fill: currentColor;
+                background: url("../../images/ellipsis.svg") no-repeat;
+            }
+            
+            .install-complete {
+                fill: #3498db;
+                background: url("../../images/check.svg") no-repeat;
+            }
+            
+            .download-complete {
+                fill: currentColor;
+                background: url("../../images/inbox.svg") no-repeat;
+            }
+            
+            .has-children {
+                fill: currentColor;
+                background: url("../../images/arrow-right.svg") no-repeat;
+            }
+            
+            .status-text {
+                color: #888888;
+                /* padding-right: 10px; */
+            }
+        </style>
+        
+        <div id="container" class="vertical layout center">
+            <div class="flex full-size">
+                <dom-if if="[[_computeBackButton(activeSublevel)]]">
+                <template>
+                    <div on-tap="_onBackButton" on-click="_onBackButton" class="back-div horizontal layout center">
+                        <div class="narrow-icon-button horizontal layout center center-justified">
+                            <iron-icon icon="sonnet:arrow-left"></iron-icon>
+                        </div>
+                        <div>
+                            Back
+                        </div>
+                    </div>
+                </template>
+                </dom-if>
+                
+                <dom-repeat items="[[mapRegions]]" as="region">
+                <template>
+                    <dom-if 
+                    if="[[_computeVisible(region, activeParent, activeSublevel, mapStatus.*)]]" 
+                    restamp="true"
+                    class$="region-entry">
+                    <template>
+                        <div class="horizontal region-entry center-justified layout" on-tap="_onExpandRegion" on-click="_onExpandRegion">
+                            <div class="flex vertical center-justified layout">
+                                [[region.name]]
+                            </div>
+                            <div class="horizontal center layout">
+                                <div class="status-text">
+                                    [[_computeStatusText(region, mapStatus.*)]]
+                                </div>
+                                <div class="icon-button vertical layout center center-justified" on-tap="_onRegionAction" on-click="_onRegionAction">
+                                    <div class$="[[_computeIconContainerClass(region, mapStatus.*)]]"></div>
+                                </div>
+                                
+                                <div class="icon-button vertical layout center center-justified">
+                                    <div class$="[[_computeExpandRegionClass(region.hasChildren)]]"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    </dom-if>
+                </template>
+                </dom-repeat>
+            </div>
+            
+        </div>
+    </template>
+    
+    <script>
+		'use strict';
+
+		class SonnetMapList extends Polymer.Element {
+			static get is () {
+				return 'sonnet-map-list';
+			}
+
+			static get properties () {
+				return {
+                    mapRegions: {
+                        type: Array
+                    },
+                    activeParent: {
+                        type: String,
+                        notify: true,
+                        value: null
+                    },
+                    activeSublevel: {
+                        type: Number,
+                        notify: true,
+                        value: 0
+                    },
+                    mapStatus: {
+                        type: Object
+                    }
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+                
+                
+                
+                this.loadService = SonnetApp.instance.loadService.bind(SonnetApp.instance);
+				this.loadPage = SonnetApp.instance.loadPage.bind(SonnetApp.instance);
+
+				// TODO: login handler
+                
+                this.loadService('sonnet-map-service')
+                .then(mapService => {
+                    this.set('_sublevelFromId', mapService._sublevelFromId);
+                    this.set('_parentFromId', mapService._parentFromId.bind(this));
+                    this.set('mapIsInstalled', mapService.mapIsInstalled.bind(this));
+                    this.set('mapIsDownloaded', mapService.mapIsDownloaded.bind(this));
+                });
+			}
+            
+            _onExpandRegion (e) {
+                console.log('_onExpandRegion')
+                let target = e.model.region;
+                console.log(target)
+                
+                if (target.hasChildren === true) {
+                    this.setProperties({
+                        activeParent: target.id,
+                        activeSublevel: this.activeSublevel + 1
+                    });
+                } else console.log('Target has no children')
+            }
+            
+            _computeBackButton (activeSublevel) {
+                return activeSublevel !== 0;
+            }
+            
+            _computeIconContainerClass (region, mapStatusChange) {
+                let classes = 'icon-container';
+                
+                switch (this.mapStatus[region.id]) {
+                    case 'dl-incomplete':
+                    case 'install-incomplete':
+                    classes += ' incomplete';
+                    break;
+                    
+                    case 'dl-complete':
+                    case 'install-complete':
+                    case 'error':
+                    classes += ' ' + this.mapStatus[region.id];
+                    break;
+                    
+                    default:
+                    classes += ' absent'
+                }
+                
+                return classes;
+            }
+            
+            _computeExpandRegionClass (hasChildren) {
+                let classes = 'icon-container';
+                
+                if (hasChildren) classes += ' has-children';
+                
+                return classes;
+            }
+            
+            _computeVisible (region, activeParent, activeSublevel, installedMapsChange) {
+                let regionParent = this._parentFromId(region.id);
+                return (regionParent === activeParent);
+            }
+            
+            _onBackButton (e) {
+                console.log('_onBackButton')
+                if (this.activeSublevel > 0) {
+                    
+                    let newSublevel = this.activeSublevel - 1;
+                    console.log('newSublevel:', newSublevel)
+                    
+                    let newParent;
+                    if (newSublevel === 0) newParent = null;
+                    else newParent = this._parentFromId(this.activeParent);
+                    
+                    this.setProperties({
+                        activeParent: newParent,
+                        activeSublevel: newSublevel
+                    })
+                } else console.log('Sublevel is 0')
+                
+            }
+            
+            _onRegionAction (e) {
+                // performs an action (download, install, uninstall) based on the region and its status
+                e.stopPropagation();
+				let targetRegion = e.model.region;
+				
+				console.log(targetRegion);
+				
+                
+                let confirmMsg, operation;
+                
+                switch (this.mapStatus[targetRegion.id]) {
+                    case 'install-complete':
+                        confirmMsg = 'Uninstall ' + targetRegion.name + '?';
+                        operation = 'uninstall-map';
+                        break;
+                    case 'error':
+                        confirmMsg = 'Remove ' + targetRegion.name + '?'
+                        operation = 'uninstall-map';
+                        break;
+                    default:
+                        confirmMsg = 'Download and install ' + targetRegion.name + '?'
+                        operation = 'download-and-install-map';
+                }
+                
+                if (operation) {
+                    let confirmVal = confirm(confirmMsg);
+                    // send request to backend
+                    if (confirmVal) {
+                        this.loadService('sonnet-map-service')
+                        .then(mapService => mapService.getMapStatus())
+                        .then(mapStatus => this.loadService('sonnet-rest-service'))
+        			    .then(restService => restService.postBackend(
+            				null,
+            				'settings',
+            				operation,
+            				{ id: targetRegion.id }
+        				)).then(resp => this.loadService('sonnet-map-service'))
+                        .then(mapService => {
+                            return mapService.getMapStatus()
+                            .catch(err => {
+                                console.log(err);
+                            });
+                        }).catch(err => {
+        					alert(err);
+        				});
+                    }
+                }
+			}
+            
+            _computeStatusText (region, mapStatusChange) {
+                switch (this.mapStatus[region.id]) {
+                    case 'dl-incomplete':
+                    return 'Downloading...';
+                    case 'dl-complete':
+                    return 'Downloaded';
+                    case 'install-incomplete':
+                    return 'Installing...';
+                    case 'install-complete':
+                    return 'Installed';
+                    case 'error':
+                    return 'Error';
+                    default:
+                    return ''
+                }
+            }
+		}
+
+		window.customElements.define(SonnetMapList.is, SonnetMapList);
+	</script>
+</dom-module>

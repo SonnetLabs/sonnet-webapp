@@ -1,0 +1,314 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<link rel="import" href="../../bower_components/iron-ajax/iron-request.html" />
+
+<link rel="import" href="./sonnet-styles.html">
+
+<!-- Mapbox GL JS -->
+<script src="../external-libs/mapbox-gl-js-0.41.0/mapbox-gl.js" type="text/javascript"></script>
+<link rel="import" href="../external-libs/mapbox-gl-js-0.41.0/mapbox-gl-js-style.html">
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+
+
+<dom-module id="sonnet-map">
+    <template>
+        <style include="sonnet-styles mapbox-gl-js-style">
+            :host {
+                height: 100%;
+                width: 100%;
+            }
+            #map {
+                height: 100%;
+                width: 100%;
+            }
+            
+            .marker {
+              background-image: url('map-location.png');
+              background-size: cover;
+              width: 16px;
+              height: 16px;
+              /*border-radius: 50%;*/
+              cursor: pointer;
+            }
+        </style>
+
+        <div id="map" class="map"></div>
+        
+        <!-- <iron-request id="xhr"></iron-request> -->
+    </template>
+    
+    <script>
+        'use strict';
+
+        class SonnetMap extends Polymer.Element {
+            static get is () {
+                return 'sonnet-map';
+            }
+            
+            static get properties () {
+                return {
+                    markers: {
+                        type: Array,
+                        value: function () {
+                            return [];
+                        }
+                    },
+                    urls: {
+                        type: Object,
+                        value: function () {
+                            return {
+                                mapsBase: "https://app.sonnetlabs.com/maps"
+                            }
+                        }
+                    },
+                    mapStyle: {
+                        type: Object,
+                        value: function () {
+                            return {};
+                        }
+                    },
+                    onlineMapDefaults: {
+                        type: Object,
+                        value: function () { return {
+                            sourceUrl: "https://free.tilehosting.com/data/v3.json?key=z4e5hp5WpEBYB8irIgsi"
+                        }}
+                    }
+                }
+            }
+            
+            constructor () {
+                super();
+            }
+            
+            ready () {
+                super.ready();
+                this.map = new mapboxgl.Map({
+                    container: this.$.map
+                });
+                // console.log("Created map");
+            }
+
+            render (bOnline, offlineRegion) {
+                console.log('render')
+
+                    // if (!this.mapInitialized) {
+                        // delay needed for page to render so it can fill the div
+                        // var bound_mapInit = this._mapInit.bind(this);
+                        // setTimeout(() => { 
+                        //     this._mapInit(bOnline, offlineRegion)
+                        //     .then(() => {
+                        //         // this.dropPin(-122.414, 37.776);
+                        //     });
+                        // }, 200);
+
+                        return this._mapInit(bOnline, offlineRegion)
+                        .then(() => {
+                            this.map.resize();
+                            
+                            return new Promise(resolve => {
+                                setTimeout(() => {
+                                    console.log('mapboxgl render resolving now');
+                                    resolve()
+                                }, 200);
+                            })
+                        }).catch(err => {
+                            return Promise.reject(err);
+                        });
+                    // }
+                    // else return resolve();
+
+            }
+            
+            reposition (lngLat, zoom) {
+                if (zoom) {
+                    this.map.setZoom(zoom);
+                }
+                this.map.setCenter(lngLat);
+            }
+            
+            _mapInit (bOnline, offlineRegion) {
+                // initialize the map
+                
+                return this._setMapStyle(bOnline, offlineRegion)
+                .then(() =>{
+                    if (!this.mapInitialized) this.map.addControl(new mapboxgl.NavigationControl());
+                    
+                    console.log("Initialized map");
+                    this.mapInitialized=true;
+                    this.repositionOfflineMapCenter();
+                    return Promise.resolve();
+                    // return Promise.resolve();
+                    // return this.repositionCurrentLocationStreetLevel()
+                    // .catch(err => {
+                    //     console.log(err);
+                    //     return this.repositionOfflineMapCenter();
+                    // });
+                });
+            }
+            
+            getCurrentLocation () {
+                return new Promise ((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(
+                        position => {
+                            resolve(position);
+                        },
+                        error => {
+                            reject(err);
+                        }
+                    );
+                });
+            }
+            
+            repositionCurrentLocationStreetLevel () {
+                return this.repositionCurrentLocation(14);
+            }
+            
+            repositionCurrentLocation (zoom) {
+                return new Promise((resolve, reject) => {
+                    this.getCurrentLocation()
+                    .then((position) => {
+                        this.reposition(
+                            [position.coords.longitude, position.coords.latitude],
+                            zoom
+                        );
+                        // this.reposition(
+                        //     [-122.414, 37.776], zoom
+                        // );
+                        resolve();
+                    }).catch(err => {
+                        reject(err);
+                    });
+                });
+            }
+            
+            _setMapStyle (bOnline, region) {
+                console.log('_setMapStyle')
+                console.log(region)
+                let style = {};
+                let v3 = {};
+                let regionInfo = {};
+                
+                return this.loadJson(this.urls.mapsBase + "/assets/style.json")
+                .then(styleTemplate => {
+                    style = styleTemplate;
+                    if (bOnline) {
+                        style.sources.openmaptiles.url = this.onlineMapDefaults.sourceUrl;
+                        
+                        return this.getCurrentLocation()
+                        .then(position => {
+                            style.center = [
+                                position.coords.longitude, position.coords.latitude
+                            ];
+                            
+                            return Promise.resolve(style);
+                        }).catch(err => {
+                            return Promise.reject(err);
+                        })
+                        
+                        return Promise.resolve(this.urls.onlineSource, null);
+                    } else {
+                        // we can add the v3 properties directly in the style.json file combined with the map's metadata.json
+                        // under the sources.xxx object, where xxx is the source name
+                        
+                        return this.loadJson(this.urls.mapsBase + "/sd/regions/" + region + "/metadata.json")
+                        .then(metadata => {
+                            console.log('loaded metadata')
+                            regionInfo = {
+                                basename: metadata.basename,
+                                bounds: this._strArrayToNumArray(metadata.bounds.split(",")),
+                                center: this._strArrayToNumArray(metadata.center.split(",")),
+                                description: metadata.description,
+                                maskLevel: metadata.maskLevel,
+                                planettime: metadata.planettime,
+                                tiles: [
+                                    this.urls.mapsBase + "/sd/regions/" + region + "/{z}/{x}/{y}.pbf"
+                                ]
+                            };
+                            
+                            return this.loadJson(this.urls.mapsBase + "/assets/v3.json");
+                        }).then(v3Template => {
+                            console.log('loaded v3Template')
+                            v3 = v3Template;
+                            for (let key in regionInfo) {
+                                if (regionInfo.hasOwnProperty(key)) {
+                                    v3[key] = regionInfo[key];
+                                }
+                            }
+                            console.log('set keys in v3')
+                            
+                            
+                            for (let key in v3) {
+                                if (v3.hasOwnProperty(key)) {
+                                    style.sources.openmaptiles[key] = v3[key];
+                                }
+                            }
+                            console.log('set keys in style.sources.openmaptiles')
+                            
+                            return Promise.resolve(style);
+                        }).catch(err => {
+                            return Promise.reject(err)
+                        })
+                    }
+                }).then(style => {
+                    // console.log('style:')
+                    // console.log(style)
+                    this.map.setStyle(style);
+                    this.set('mapStyle', style);
+                    return Promise.resolve();
+                })
+                .catch(err => {
+                    return Promise.reject();
+                });
+            }
+            
+            loadJson (url) {
+				return new Promise ((resolve, reject) => {
+                    var xhrElement = document.createElement('iron-request');
+					xhrElement.send({ url: url, method: "GET"})
+					.then((request) => {
+						resolve(JSON.parse(request.response));
+					})
+                    .catch((err) => {
+                        console.log("loadJson: Promise rejected.");
+                        reject(err);
+                    });
+				});
+			}
+            
+            dropPin (lon,lat) {
+                var el = document.createElement('div');
+                el.className = 'marker';
+
+                // make a marker for each feature and add to the map
+                new mapboxgl.Marker(el)
+                .setLngLat([lon,lat])
+                .addTo(this.map);
+                
+                // add to element's list of markers
+                // TODO: add some ID info in order to be able to remove later
+                this.markers.push(el);
+                return el;
+            }
+            
+            repositionOfflineMapCenter () {
+                if (this.mapStyle.sources && this.mapStyle.sources.openmaptiles.center) {
+                    // maps can be zoomed in on the middle of nowhere sometimes, so zoom out a bit
+                    let mapCenter = this.mapStyle.sources.openmaptiles.center
+                    this.reposition([mapCenter[0], mapCenter[1]], mapCenter[2]);
+                }
+            }
+            
+            _strArrayToNumArray (strArray) {
+                let numArray = [];
+                for (let i = 0; i < strArray.length; i++) {
+                    numArray.push(parseFloat(strArray[i]))
+                }
+
+                return numArray;
+            }
+        }
+        
+        window.customElements.define(SonnetMap.is, SonnetMap);
+    </script>
+</dom-module>
+

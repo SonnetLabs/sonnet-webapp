@@ -1,0 +1,129 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+
+<link rel="import" href="./sonnet-styles.html">
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-pages/sonnet-abstract-page.html" />
+
+
+<dom-module id="sonnet-disconnect-banner">
+    <template>
+        <style include="iron-flex iron-flex-alignment sonnet-styles">
+            :host {
+                display: block;
+            }
+            
+            #container {
+                height: 100%;
+                height: 25px;
+                width: 100%;
+                background-color: #3e3e3e;
+                color: white;
+            }
+            
+            .hidden {
+                display: none;
+            }
+            
+            .disabled {
+                -webkit-user-select: none;  /* Chrome all / Safari all */
+                -moz-user-select: none;     /* Firefox all */
+                -ms-user-select: none;      /* IE 10+ */
+                user-select: none; 
+            }      
+        </style>
+        
+        <div id="header-body" hidden="{{clientConnected}}">
+            <div id="container" class="vertical center-justified layout center">
+                <div>
+                    <span on-tap="_onReconnectNow"><iron-icon icon="sonnet:repeat"></iron-icon> [[reconnectButtonText]]</span>
+                </div>
+            </div>
+        </div>
+    </template>
+    
+    <script>
+        'use strict';
+
+        class SonnetDisconnectBanner extends SonnetAbstractPage {
+            static get is () {
+                return 'sonnet-disconnect-banner';
+            }
+            
+            static get properties () {
+                return {
+                    clientConnected: {
+                        type: Boolean,
+                        value: true
+                    },
+                    reconnectEnabled: {
+                        type: Boolean,
+                        value: true
+                    },
+                    reconnectButtonText: {
+                        type: String,
+                        value: 'Offline'
+                    },
+                    reconnectCountdownSeconds: {
+                        type: Number
+                    }
+                };
+            }
+            
+            constructor () {
+                super();
+            }
+            
+            ready () {
+                super.ready();
+                
+                this.loadService(['sonnet-socket-service', 'sonnet-session-service'])
+                .then(services => {
+                    let socketService = services[0];
+                    let sessionService = services[1];
+                    
+                    socketService.addEventListener('s-socket-status', (event) => {
+                        this.set('clientConnected', event.detail);
+                    })
+                });
+            }
+            
+            _onReconnectNow (e) {
+                e.stopPropagation();
+                
+                let defaultText = 'Offline';
+                
+                this.set('reconnectEnabled', false);
+                this.set('reconnectButtonText', 'Reconnecting...')
+                this.loadService('sonnet-session-service')
+                .then(sessionService=> {
+                    return sessionService.attemptReconnect();
+                })
+                .then(success => {
+                    return new Promise(resolve => {
+                        setTimeout(() => {
+                            if (success) {
+                                return resolve();
+                            }
+                            else {
+                                this.set('reconnectButtonText', 'Device unavailable.');
+                                setTimeout(() => {resolve()}, 2*1000);
+                                
+                            }
+                        }, 1000);
+                    });
+                })
+                .catch(err => {
+                    console.log(err);
+                    return Promise.resolve();
+                })
+                .then(() => {
+                    this.set('reconnectEnabled', true);
+                    this.set('reconnectButtonText', defaultText);
+                });
+            }
+        }
+        
+        window.customElements.define(SonnetDisconnectBanner.is, SonnetDisconnectBanner);
+    </script>
+</dom-module>
+

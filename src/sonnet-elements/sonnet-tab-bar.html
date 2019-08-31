@@ -1,0 +1,250 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<link rel="import" href="../../bower_components/polymer/lib/mixins/gesture-event-listeners.html">
+
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="../sonnet-app/sonnet-app.html" />
+
+<link rel="import" href="./sonnet-button.html" />
+<link rel="import" href="./sonnet-icons.html" />
+<link rel="import" href="./sonnet-styles.html">
+
+<dom-module id="sonnet-tab-bar">
+	<template>
+		<style include="sonnet-styles iron-flex iron-flex-alignment">
+			:host {
+				display: var(--sonnet-tab-bar-display, block);
+				/* width: auto;
+				height: auto; */
+				background-color: #2c3e50;
+				z-index: 1000;
+				width: var(--sonnet-tab-bar-width, 0);
+				height: var(--sonnet-tab-bar-height, 0);
+			}
+
+			.tab-bar {
+				height: 100%;
+				width: 100%;
+			}
+			
+			/* .horizontal-tab-bar {
+				width: 100%;
+				height: 50px;
+			}
+			
+			.vertical-tab-bar {
+				width: 75px;
+				height: 100%;
+			} */
+
+			sonnet-tab {
+				@apply(--layout-flex);
+			}
+
+			sonnet-button {
+				width: 100%;
+				--sonnet-button-padding: 0;
+				--sonnet-button-fg: #ecf0f1;
+				--sonnet-button-bg: transparent;
+				padding: 5px;
+			}
+
+			.active {
+				--sonnet-button-fg: #f39c12;
+			}
+
+			.tab-label {
+				font-size: 0.75em;
+			}
+
+			.hidden {
+				display:none
+			}
+			
+			.msg-indicator::before {
+				position: absolute;
+				right: 0;
+				top: 0;
+				height: 10px;
+				width: 10px;
+				background-color: #e74c3c;
+				z-index: 9000;
+				border-radius: 50%;
+				content: '';
+				font-size: 0px;
+			}
+		</style>
+
+		<div id="container" class$="[[_computeStyle(desktop, activePage)]]">
+			<dom-repeat items="[[tabs]]" as="tab">
+				<template>
+					<sonnet-button class$="[[_computeButtonClass(activePage, tab.name)]]" on-tap="_onTap">
+						<iron-icon icon="{{tab.icon}}" class$="[[_computeIconClass(tab, indicators.*)]]"></iron-icon>
+						<div class="tab-label">[[tab.label]]</div>
+					</sonnet-button>
+				</template>
+			</dom-repeat>
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetTabBar extends Polymer.GestureEventListeners(Polymer.Element) {
+			static get is () {
+				return 'sonnet-tab-bar';
+			}
+
+			static get properties () {
+				return {
+					tabs: {
+						type: Object,
+						value: [
+							{
+								name: 'sonnet-chats-page',
+								label: 'Chats',
+								icon: 'sonnet:speech-bubble'
+							},
+							{
+								name: 'sonnet-contacts-page',
+								label: 'Contacts',
+								icon: 'sonnet:head'
+							},
+							{
+								name: 'sonnet-maps-page',
+								label: 'Maps',
+								icon: 'sonnet:map'
+							},
+							{
+								name: 'sonnet-sos-page',
+								label: 'SOS',
+								icon: 'sonnet:help'
+							},
+							{
+								name: 'sonnet-settings-page',
+								label: 'Settings',
+								icon: 'sonnet:cog'
+							}
+						]
+					},
+					activeTab: {
+						type: String,
+						value: 'chats',
+						notify: true,
+						reflectToAttribute: true
+					},
+					desktop: {
+						type: Boolean
+					},
+					activePage: {
+						type: String
+					},
+					indicators: {
+						type: Object,
+						notify: true
+					}
+				};
+			}
+
+			constructor () {
+				super();
+				
+				this.loadService = SonnetApp.instance.loadService.bind(SonnetApp.instance);
+				this.loadPage = SonnetApp.instance.loadPage.bind(SonnetApp.instance);
+			}
+
+			ready () {
+				super.ready();
+			}
+
+			_tabActive (activeTab, tabName) {
+				return (activeTab === tabName);
+			}
+
+			_computeButtonClass (activePage, tabName) {
+				var classList = 'layout vertical';
+				if (activePage === tabName) {
+					classList += ' active';
+				}
+				
+				return classList;
+			}
+			
+			_computeIconClass (tab, indicatorChangeRecord) {
+				let classes = '';
+				let path = indicatorChangeRecord.path.split('.')[1];
+				
+				switch (path) {
+					case 'msg':
+					if (tab.name === 'sonnet-chats-page' && indicatorChangeRecord.value) {
+						classes += 'msg-indicator';
+					}
+					break;
+				}
+				
+				return classes;
+			}
+
+			_onTap (e) {
+				let target = e.model.tab.name;
+				if (this.activePage !== target) {
+					this.loadPage(target);
+					
+					switch (target) {
+						case 'sonnet-chats-page':
+						this.set('indicators.msg', false);
+					}
+				}
+			}
+			
+			_computeStyle (desktop, activePage) {
+				let classes = 'tab-bar layout center';
+
+				if (desktop) {
+					console.log('desktop detected')
+					classes += ' vertical around-justified';
+					this._setWidthHeight('75px', '100%');
+				} else {
+					classes += ' horizontal';
+					this._setWidthHeight('100%', '50px');
+				}
+				
+				if (this._checkIfTabPage(activePage)) {
+					this.updateStyles({
+						'--sonnet-tab-bar-display': 'block'
+					});
+				}
+				else {
+					this.updateStyles({
+						'--sonnet-tab-bar-display': 'none'
+					});
+				}
+				
+				return classes;
+			}
+			
+			_setWidthHeight (width, height) {
+				this.updateStyles({
+					'--sonnet-tab-bar-width': width,
+					'--sonnet-tab-bar-height': height 
+				});
+			}
+			
+			_checkIfTabPage (activePage) {
+				for (let i = 0; i < this.tabs.length; i++) {
+					if (activePage === this.tabs[i].name) {
+						return true;
+					}
+				}
+				
+				return false;
+			}
+		}
+
+		window.customElements.define(SonnetTabBar.is, SonnetTabBar);
+	</script>
+</dom-module>
+

@@ -1,0 +1,46 @@
+<script src="../../bower_components/pnglib/pnglib.js"></script>
+<script src="../../bower_components/identicon.js/identicon.js"></script>
+
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+
+<dom-module id="sonnet-identicon-service">
+	<script>
+		'use strict';
+		
+		class SonnetIdenticonService extends SonnetAbstractService {
+			static get is () {
+				return 'sonnet-identicon-service';
+			}
+
+			static get properties () {
+				return {
+					serviceName: {
+						type: String,
+						value: 'identiconService'
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+			}
+
+			generateIconUrl (hash, options) {
+				options = options || {
+					size: 88
+				};
+
+				return new Identicon(hash, options).toString();
+			}
+		}
+
+		window.customElements.define(SonnetIdenticonService.is, SonnetIdenticonService);
+	</script>
+</dom-module>

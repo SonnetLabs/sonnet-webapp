@@ -1,0 +1,14 @@
+{
+	"lint": {
+		"rules": [
+			"polymer-2"
+		]
+	},
+	"sources": [
+		"images/**/*",
+		"maps/**/*",
+		"src/**/*",
+		"bower.json",
+		"service-worker.js"
+	]
+}

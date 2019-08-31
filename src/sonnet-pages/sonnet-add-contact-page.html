@@ -1,0 +1,255 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!-- <link rel="import" href="../polymer/lib/elements/dom-repeat.html" /> -->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-input.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+<link rel="import" href="../sonnet-elements/sonnet-image-upload.html" />
+<link rel="import" href="../sonnet-elements/sonnet-camera-upload.html" />
+<link rel="import" href="../sonnet-elements/sonnet-qrcode.html" />
+
+<dom-module id="sonnet-add-contact-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+
+			#container sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+				--sonnet-button-fg: #3498db;
+				--sonnet-button-bg: transparent;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			#container {
+				padding: 50px 0;
+			}
+
+			.contact {
+				padding: 10px;
+				color: #2c3e50;
+			}
+
+			.contact-icon {
+				height: 44px;
+				width: 44px;
+				margin-right: 5px;
+			}
+
+			.separator {
+				width: 100%;
+				background: #ecf0f1;
+				padding: 10px;
+				color: #2c3e50;
+			}
+
+			#search {
+				padding: 10px;
+			}
+
+			sonnet-input {
+				--sonnet-input-bg: #ecf0f1;
+				--sonnet-input-fg: #2c3e50;
+			}
+            
+            #my-qrcode-div {
+                height: 100%;
+            }
+            
+            #my-qrcode {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+            
+            .photo-upload {
+				height: 50px;
+				width: 50px;
+			}
+			
+			.button-icon {
+				height: 100%;
+				width: 100%;
+			}
+		</style>
+
+		<div page="add-contact">
+			<sonnet-page-header>
+				<div class="title">Add Contact</div>
+				<div slot="left">
+                    <sonnet-button on-tap="_onBack">
+    					<iron-icon icon="sonnet:arrow-left"></iron-icon>
+    				</sonnet-button>
+				</div>
+				
+				<div slot="right">
+					<sonnet-image-upload hidden="[[bMobile]]" id="browser-upload" class="photo-upload" camera capture="camera" scale scale-ratio="0.5">
+						<div class="vertical layout center center-justified button-icon">
+							<iron-icon icon="sonnet:camera"></iron-icon>
+						</div>
+					</sonnet-image-upload>
+					
+					<sonnet-camera-upload hidden="[[!bMobile]]" id="mobile-upload" class="photo-upload" scale scale-ratio="0.1">
+						<div class="vertical layout center center-justified button-icon">
+							<iron-icon icon="sonnet:camera"></iron-icon>
+						</div>
+					</sonnet-image-upload>
+				</div>
+			</sonnet-page-header>
+
+			<div id="container">
+                <div id="my-qrcode-div" class="flex">
+                    <sonnet-qrcode id="my-qrcode" size="300"></sonnet-qrcode>
+                </div>
+			</div>
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetAddContactPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-add-contact-page';
+			}
+
+			static get properties () {
+				return {
+					currentUser: {
+						type: Object,
+						value: {}
+					},
+					bMobile: {
+						type: Boolean
+					}
+                };
+			}
+
+			ready () {
+				super.ready();
+                
+                this.loadService('sonnet-session-service')
+				.then((sessionService) => {
+					sessionService.addEventListener('login', this._updateQrCode.bind(this));
+				});
+				
+				document.addEventListener("deviceready", () => {
+					let platform = device.platform.toLowerCase();
+					console.log('platform:', platform)
+					
+			        if (platform === 'ios' || platform === 'android') {
+						this.set('bMobile', true);
+					} else {
+						this.set('bMobile', false);
+					}
+			    }, false);
+			    
+				
+                this.$['browser-upload'].addEventListener('sonnet-image-upload', this._onPhotoUpload.bind(this));
+				this.$['mobile-upload'].addEventListener('sonnet-image-upload', this._onPhotoUpload.bind(this));
+			}
+			
+			_onBack () {
+				this.prevPage = this.prevPage || 'sonnet-contacts-page';
+
+				this.loadPage(this.prevPage);
+			}
+			
+			_updateQrCode (event) {
+				
+				var encodedMyInfo = JSON.stringify({
+					id: this.currentUser.userId,
+					name: this.currentUser.displayName, // TODO: displayName
+					icon: this.currentUser.icon
+				});
+				this.$['my-qrcode'].setQrCode(encodedMyInfo);
+			}
+            
+            _onPhotoUpload (e) {
+				console.log('_onPhotoUpload')
+				let qrB64 = e.detail;
+				
+				console.log('qrb64:', qrB64)
+
+                this._addContactViaQrcode(qrB64)
+				.then(() => {
+					this.loadPage('sonnet-contacts-page');
+				})
+				.catch((err) => {
+					alert('Sonnet Message:\n\n' + err.message);
+				});
+            }
+			
+			// can also use this to send QR codes to others through images
+			_addContactViaQrcode (qrB64) {
+				return new Promise((resolve, reject) => {
+					// loading services separately because QR operations are very expensive
+					// if it fails to recognize for whatever reason,
+					// it will then go to the catch block
+					// instead of loading the contact service. 
+					let contactService;
+					let newContact;
+					
+					this.loadService('sonnet-qrcode-service')
+	                .then((qrcodeService) => {
+	                    return qrcodeService.decodeB64(qrB64);
+	                })
+	                .then((value) => {
+						newContact = JSON.parse(value);
+						
+						return this.loadService('sonnet-contact-service');
+	            	})
+					.then(contactService => {
+						contactService.sendAddContactRequest(newContact);
+						return contactService.addContact(newContact);
+					})
+					.then(() => {
+						resolve();
+					})
+					.catch((err) => {
+						// make sure the functions above throw an Error-like object
+						reject(err);
+					});
+				});
+				
+			}
+			
+			_onShowOnlineUsers () {
+				this.loadService('sonnet-contact-service')
+				.then((contactService) => {
+					contactService.getContacts();
+				});
+			}
+			
+			// for testing only
+			_onShowSavedContacts () {
+				this.loadService('sonnet-contact-service')
+				.then((contactService) => {
+					return contactService._readContacts();
+				})
+				.then((savedContacts) => {
+					console.log('Saved contacts:');
+					console.log(savedContacts);
+				});
+			}
+		}
+
+		window.customElements.define(SonnetAddContactPage.is, SonnetAddContactPage);
+	</script>
+</dom-module>

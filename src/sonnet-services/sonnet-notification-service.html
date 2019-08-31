@@ -1,0 +1,314 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+
+<dom-module id="sonnet-notification-service">
+    <template>
+    </template>
+    <script>
+    'use strict';
+    
+    class SonnetNotificationService extends SonnetAbstractService {
+        
+        static get is () {
+            return 'sonnet-notification-service';
+        }
+        
+        static get properties () {
+            return {
+                permStatus: {
+                    type: String
+                },
+                reg: {
+                    type: Object,
+                    value: null
+                },
+                desktop: {
+                    type: Boolean
+                },
+                indicators: {
+                    type: Object,
+                    notify: true
+                },
+                // serviceworker (eg. mobile+desktop chrome), window (eg. desktop safari), or null (eg. iOS)
+                notificationSupport: {
+                    type: String
+                },
+                postMessageSupport: {
+                    type: Boolean
+                }
+            };
+        }
+        
+        constructor () {
+            super();
+        }
+        
+        ready () {
+            super.ready();
+            this.requestPerms();
+            
+            this.loadService('sonnet-session-service')
+            .then(sessionService => {
+                sessionService.addEventListener('login', this._swMsgSetup.bind(this));
+            });
+            
+            // TODO: determine supported api
+            this.determineNotificationSupport()
+            .then(() => {
+                this.determinePostMessageSupport();
+            });
+            
+            this.addEventListener('s-chat-notify', this._msgNotificationClick.bind(this))
+            
+        }
+        
+        determineNotificationSupport () {    
+            console.log('determineNotificationSupport')   
+            // try serviceworker, then window     
+            return new Promise((resolve, reject) => {
+                console.log('entered promise')
+                if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistration) {
+                    console.log('serviceworker seems available...')
+                    navigator.serviceWorker.getRegistration()
+                    .then(reg => {
+                        if (reg && reg.showNotification) {
+                            console.log('serviceworker supported')
+                            return resolve('serviceworker');
+                        }
+                        else return resolve(null);
+                    }).catch(err => {
+                        console.log('getRegistrationErr')
+                        return reject(err);
+                    });
+                } 
+                else {
+                    console.log('serviceworker unavailable')
+                    return resolve(null);
+                }
+            }).catch(err => {
+                console.log(err);
+                return Promise.resolve(null);
+            }).then(notificationType => {
+                if (!notificationType) {
+                    console.log('trying window')
+                    if ('Notification' in window) {
+                        console.log('window supported')
+                        return Promise.resolve('window');
+                    }
+                    else return Promise.resolve(null);
+                }
+                else return Promise.resolve(notificationType)
+            }).then(notificationType => {
+                console.log('support:', notificationType)
+                this.set('notificationSupport', notificationType)
+                return Promise.resolve();
+            });
+        }
+        
+        determinePostMessageSupport () {
+            let supported = false;
+            if (window.postMessage && navigator.serviceWorker.controller) {
+                supported = true;
+            }
+            
+            this.set('postMessageSupport', supported);
+        }
+        
+        requestPerms () {
+            console.log('requesting perms');
+            if (!('Notification' in window)) {
+                console.log('Notification API not supported!');
+                return;
+            }
+            
+            Notification.requestPermission(result => {
+                this.set('permStatus', result)
+            });
+        }
+        
+        notify (title, options) {
+            if (Notification && Notification.permission === 'granted') {
+                options = options || {};
+                switch (this.notificationSupport) {
+                    case 'serviceworker':
+                        this._notifySw(title, options);
+                        break;
+                    
+                    case 'window':
+                        this._notifyWindow(title, options);
+                        break;
+                        
+                    default:
+                        console.log('no notification support');
+                }
+            }
+            else console.log('Permission not granted')
+        }
+        
+        notifyNewMsg (newMsg) {
+            // notification
+            if (document.hidden) {
+    			this.loadService('sonnet-contact-service')
+    			.then(contactService => {
+    				// name lookup
+    				// TODO: getContactById will fail on group messsages
+    				// refactor so either it knows or will try contacts then group chats
+    				let contact = contactService.getContactById(newMsg.chatId);
+    				
+    				let options = {
+    					tag: 'chat-' + newMsg.chatId,
+    					body: newMsg.message,
+    					
+    					icon: '/images/notification_icon.png', // TODO: data.icon should be the contact image icon (like a base64 url), or a 
+
+    					data: {
+    						type: 'chat',
+    						chatId: newMsg.chatId
+    					}
+    				};
+    				
+    				this.notify(contact.name, options);
+    				
+    				// TODO: if !contact
+    			});
+            }
+            
+            // indicator badge
+            let shouldIndicate = false;
+            
+            this.loadService('sonnet-message-service')
+            .then(messageService => {
+                if (this.activePage !== 'sonnet-chats-page') {
+                    if (this.desktop) shouldIndicate = true;
+                    else if (newMsg.chatId !== messageService.currentChat.id) shouldIndicate = true;
+                }
+                
+                if (shouldIndicate) {
+                    this.set('indicators.msg', true);
+                }
+            });
+        }
+        
+        _registerServiceWorker () {
+            return new Promise((resolve, reject) => {
+                if ('serviceWorker' in navigator) {
+                    window.addEventListener('load', function() {
+                        navigator.serviceWorker.register('service-worker.js');
+                    });
+                }
+            });
+        }
+        
+        _swMsgSetup () {
+            if (this.postMessageSupport === true) {
+                console.log('postMessage supported, initializing')
+                this.set('messageChannel', new MessageChannel())
+                this.messageChannel.port1.onmessage = this._onPostMessage.bind(this);
+                this.swSendMsg({ type: 'init' });
+            }
+            else console.log('postMessage not supported')
+        }
+        
+        _notifySw (title, options) {
+            console.log('_notifySw')
+            options = options || {};
+            options.badge = '/images/notification_icon.png';
+            options.renotify = true;
+            
+            navigator.serviceWorker.getRegistration().then(function(reg) {
+                reg.showNotification(title, options);
+            });
+        }
+        
+        _notifyWindow (title, options) {
+            console.log('_notifyWindow')
+            let n = new Notification(
+                title,
+                {
+                    body: options.body,
+                    // ...prevent duplicate notifications
+                    tag : options.tag
+                }
+            );
+            
+            // Remove the notification from Notification Center when clicked.
+            n.onclick = () => {
+                n.close();
+                // calls onclose
+            };
+            // Callback function when the notification is closed.
+            n.onclose = () => {
+                console.log('Notification closed');
+                console.log(options)
+                
+                if (options.data && options.data.chatId) {
+                    this.dispatchEvent(new CustomEvent(
+                        's-chat-notify',
+                        { detail: {
+                            chatId: options.data.chatId
+                        }}
+                    ));
+                }
+                
+                this.set('indicators.msg', false);
+            };
+        }
+        
+        _msgNotificationClick (event) {
+            console.log('got s-chat-notify')
+            
+            this.loadService('sonnet-message-service')
+            .then(messageService => {
+                messageService.getChatById(event.detail.chatId)
+                .then(chat => {
+                    if (chat) {
+                        this.set('indicators.msg', false);
+                        
+                        if (this.desktop) {
+                            this.loadPage('sonnet-chats-page')
+                            .then(chatsPage => {
+                                return chatsPage.loadChat(chat);
+                            });
+                        } else {
+                            messageService.loadChat(chat)
+                            .then(() => {
+                                return this.loadPage('sonnet-chat-page'); // should fire the onfocus and other events
+                            });
+                        }
+                    }
+                    else return Promise.reject(new Error('Chat ' + event.detail.chatId + ' does not exist'));
+                }).catch(err => {
+                    console.log(err);
+                });
+            });
+        }
+        
+        _onPostMessage (event) {
+            console.log('notificationService: received postMessage')
+            console.log(event.data);
+            
+            switch (event.data.type) {
+                case 'chat':
+                this.dispatchEvent(new CustomEvent(
+                    's-chat-notify',
+                    { detail: {
+                        chatId: event.data.chatId
+                    }}
+                ));
+                break;
+            }
+        }
+        
+        swSendMsg (messageObj) {
+            console.log(messageObj);
+            if (this.postMessageSupport) {
+                navigator.serviceWorker.controller.postMessage(messageObj, [this.messageChannel.port2]);
+            }
+        }
+    }
+    
+    window.customElements.define(SonnetNotificationService.is, SonnetNotificationService);
+    </script>
+</dom-module>

@@ -1,0 +1,49 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="./sonnet-abstract-page.html" />
+
+<dom-module id="sonnet-abstract-tab-page">
+	<script>
+		'use strict';
+
+		class SonnetAbstractTabPage extends SonnetAbstractPage {
+			static get is () {
+				return 'sonnet-abstract-tab-page';
+			}
+
+			static get properties () {
+				return {
+					activePage: {
+						type: String,
+						notify: true,
+						reflectToAttribute: true
+					}
+				};
+			}
+
+			constructor () {
+				super();
+
+				if (this.constructor === SonnetAbstractPage) {
+					throw new TypeError('Cannot construct Abstract instances directly');
+				}
+
+				this.addEventListener('s-page-focus', this._updateTab);
+			}
+
+			ready () {
+				super.ready();
+			}
+
+			_updateTab (e) {
+				e.stopPropagation();
+
+				this.set('activePage', e.detail.pageId);
+			}
+		}
+
+		window.customElements.define(SonnetAbstractTabPage.is, SonnetAbstractTabPage);
+	</script>
+</dom-module>

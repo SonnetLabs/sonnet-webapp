@@ -1,0 +1,148 @@
+<script src="../external-libs/openlayers-4.3.3/ol.js" type="text/javascript"></script>
+<!-- <script src="../external-libs/openlayers-4.3.3/ol-debug.js" type="text/javascript"></script> -->
+<!-- <script src="https://openlayers.org/en/v4.3.3/build/ol.js" type="text/javascript"></script> -->
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<link rel="import" href="./sonnet-styles.html">
+<link rel="import" href="../external-libs/openlayers-4.3.3/ol-style.html" />
+<!-- <script src="https://openlayers.org/en/v4.4.0/examples/resources/mapbox-streets-v6-style.js"></script> -->
+
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Open+Sans" />
+
+<!-- ol-mapbox-styles -->
+<script src="../external-libs/olms.js"></script>
+
+
+<dom-module id="sonnet-map">
+    <template>
+        <style include="sonnet-styles openlayers-style">   
+            :host {
+                height: 100%;
+            }
+            #map {
+                height: 100%;
+                width: 100%;
+            }
+        </style>
+
+        <div id="map" class="map"></div>
+    </template>
+    
+    <script>
+        'use strict';
+
+        class SonnetMap extends Polymer.Element {
+            static get is () {
+                return 'sonnet-map';
+            }
+            
+            static get properties () {
+                return {}
+            }
+            
+            constructor () {
+                super();
+                this.map = new ol.Map({});
+                console.log("Created map");
+            }    
+            
+            ready () {
+                super.ready();
+            }
+
+            render () {
+                if (!this.mapInitialized) {
+                    // delay needed for page to render so it can fill the div
+                    setTimeout(this._mapInit.bind(this), 200);
+                }
+            }
+            
+            _mapInit () {
+                this.map.setTarget(this.$.map);
+                
+                var tilegrid = ol.tilegrid.createXYZ({tileSize: 512, maxZoom: 14});
+                
+                var style = new ol.style.Style({
+                    text: new ol.style.Text({
+                      font: 'bold 11px "Open Sans", "Arial Unicode MS", "sans-serif"',
+                      placement: 'line',
+                      fill: new ol.style.Fill({
+                        color: 'black'
+                      })
+                    })
+                  });
+                
+                this.mainlayer = new ol.layer.VectorTile({
+                    
+                    source: new ol.source.VectorTile({
+                        attributions: '© <a href="https://www.mapbox.com/map-feedback/">Mapbox</a> ' +
+                            '© <a href="https://www.openstreetmap.org/copyright">' +
+                            'OpenStreetMap contributors</a>',
+                        format: new ol.format.MVT(),
+                        tileGrid: tilegrid,
+                        tilePixelRatio: 8,
+                        url: 'https://app.sonnetlabs.com/maps/pbf/{z}/{x}/{y}.pbf'
+                    }),
+                    // style: createMapboxStreetsV6Style(ol.style.Style, ol.style.Fill, ol.style.Stroke, ol.style.Icon, ol.style.Text)
+                    style: function(feature) {
+                        style.getText().setText(feature.get('name'));
+                        return style; // this doesn't actually work...
+                    }
+                });
+                
+                // this.map.addLayer(
+                //     // new ol.layer.Tile({
+                //     //     // source: new ol.source.OSM()
+                //     //     source: new ol.source.XYZ({
+                //     //         url: "https://app.sonnetlabs.com/maps/png/{z}/{x}/{y}.png"
+                //     //     })
+                //     //     // source: new ol.source.TileJSON({
+                //     //     //     url: "https://maps.sonnetlabs.com/styles/osm-bright.json",
+                //     //     //     crossOrigin: 'anonymous'
+                //     // })
+                //     
+                //     
+                //     // OMT mbtiles
+                //     new ol.layer.VectorTile({
+                //         source: new ol.source.VectorTile({
+                //             attributions: '© <a href="https://www.mapbox.com/map-feedback/">Mapbox</a> ' +
+                //                 '© <a href="https://www.openstreetmap.org/copyright">' +
+                //                 'OpenStreetMap contributors</a>',
+                //             format: new ol.format.MVT(),
+                //             url: 'https://app.sonnetlabs.com/maps/pbf/{z}/{x}/{y}.pbf'
+                //         }),
+                //         style: createMapboxStreetsV6Style(ol.style.Style, ol.style.Fill, ol.style.Stroke, ol.style.Icon, ol.style.Text)
+                //     })
+                //     
+                //     
+                // );
+                
+                
+                // style map
+                (function(element) {
+                    fetch('../src/external-libs/style.json')
+                    .then(function(response) {
+                      response.json()
+                      .then(function(glStyle) {
+                        olms.applyStyle(element.mainlayer, glStyle, 'openmaptiles')
+                        .then(function() {
+                          element.map.addLayer(element.mainlayer);
+                        });
+                      });
+                    });
+                })(this);
+                
+                
+                this.map.setView(new ol.View({
+                    center: ol.proj.fromLonLat([-114.0708, 51.0486]),
+                    zoom: 7,
+                    // maxZoom: 28
+                }));
+                this.mapInitialized = true;
+                this.map.updateSize();
+            }
+        }
+        
+        window.customElements.define(SonnetMap.is, SonnetMap);
+    </script>
+</dom-module>
+

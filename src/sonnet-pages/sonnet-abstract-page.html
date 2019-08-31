@@ -1,0 +1,61 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<link rel="import" href="../../bower_components/polymer/lib/mixins/gesture-event-listeners.html">
+
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../sonnet-app/sonnet-app.html" />
+
+<dom-module id="sonnet-abstract-page">
+	<script>
+		'use strict';
+
+		class SonnetAbstractPage extends Polymer.GestureEventListeners(Polymer.Element) {
+			static get is () {
+				return 'sonnet-abstract-page';
+			}
+
+			static get properties () {
+				return {
+					pageId: {
+						type: String,
+						reflectToAttribute: true
+					}
+				};
+			}
+
+			constructor () {
+				super();
+
+				if (this.constructor === SonnetAbstractPage) {
+					throw new TypeError('Cannot construct Abstract instances directly');
+				}
+
+				// Set the "page-id" attribute so it can be selected by iron-page
+				this.set('pageId', this.constructor.is);
+
+				this.loadService = SonnetApp.instance.loadService.bind(SonnetApp.instance);
+				this.loadPage = SonnetApp.instance.loadPage.bind(SonnetApp.instance);
+
+				this.addEventListener('s-page-focus', this._onFocus);
+				this.addEventListener('s-page-blur', this._onBlur);
+
+				SonnetApp.instance.registerPage(this.pageId, new Promise ((resolve) => {
+					this._pageResolve = resolve;
+				}));
+			}
+
+			ready () {
+				super.ready();
+
+				this._pageResolve(this);
+			}
+
+			_onFocus () {}
+
+			_onBlur () {}
+		}
+
+		window.customElements.define(SonnetAbstractPage.is, SonnetAbstractPage);
+	</script>
+</dom-module>

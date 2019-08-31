@@ -1,0 +1,7 @@
+{
+  "name": "sonnet",
+  "short_name": "sonnet",
+  "description": "Web App for Sonnet",
+  "start_url": "/",
+  "display": "standalone"
+}

@@ -1,0 +1,245 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html">-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html">-->
+<link rel="import" href="./sonnet-styles.html">
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+
+<dom-module id="sonnet-input">
+	<template>
+		<style include="sonnet-styles">
+			:host {
+				display: block;
+				width: 100%;
+				position: relative;
+			}
+
+			input {
+				display: block;
+				width: 100%;
+				padding: .5rem .75rem;
+				font-size: 1rem;
+				line-height: 1.25;
+				color: var(--sonnet-input-fg, #464a4c);
+				background-color: var(--sonnet-input-bg, #fff);
+				background-image: none;
+				-webkit-background-clip: padding-box;
+				background-clip: padding-box;
+				border: 0;
+				border-radius: 0;
+				-webkit-transition: border-color ease-in-out .15s, -webkit-box-shadow ease-in-out .15s;
+				transition: border-color ease-in-out .15s, -webkit-box-shadow ease-in-out .15s;
+				-o-transition: border-color ease-in-out .15s, box-shadow ease-in-out .15s;
+				transition: border-color ease-in-out .15s, box-shadow ease-in-out .15s;
+				transition: border-color ease-in-out .15s, box-shadow ease-in-out .15s, -webkit-box-shadow ease-in-out .15s
+			}
+
+			input:focus {
+				color: var(--sonnet-input-fg, #464a4c);
+				background-color: var(--sonnet-input-bg, #fff);
+				border-color: #5cb3fd;
+				outline: 0
+			}
+
+			input::-webkit-input-placeholder {
+				color: #bdc3c7;
+				opacity: 1
+			}
+
+			input::-moz-placeholder {
+				color: #bdc3c7;
+				opacity: 1
+			}
+
+			input:-ms-input-placeholder {
+				color: #bdc3c7;
+				opacity: 1
+			}
+
+			input::placeholder {
+				color: #bdc3c7;
+				opacity: 1
+			}
+
+			input:disabled,
+			input[readonly] {
+				background-color: #eceeef;
+				opacity: 1
+			}
+
+			input:disabled,
+			input[disabled] {
+				cursor: not-allowed
+			}
+
+			input.large {
+				padding: 0.75rem 1.125rem;
+				font-size: 1.25rem;
+			}
+
+			input.small {
+				padding: 0.25rem 0.5rem;
+				font-size: 0.875rem;
+			}
+
+
+			/* for icons */
+
+			input.icon-right {
+				padding-right: 2.25em;
+			}
+			input.icon-left {
+				padding-left: 2.25em;
+			}
+
+			input.large.icon-right {
+				padding-right: 2.75em;
+			}
+			input.large.icon-left {
+				padding-left: 2.75em;
+			}
+
+			input.small.icon-right {
+				padding-right: 2em;
+			}
+			input.small.icon-left {
+				padding-left: 2em;
+			}
+
+			iron-icon {
+				position: absolute;
+				top: 50%;
+				color: #bdc3c7;
+				margin-top: -12px;
+			}	
+				iron-icon.icon-right {
+					right: 0.5em;
+				}
+				iron-icon.icon-left {
+					left: 0.5em;
+				}
+
+			iron-icon.large {
+				height: 30px;
+				width: 30px;
+				margin-top: -15px;
+			}
+				iron-icon.large.icon-right {
+					right: 1em;
+				}
+				iron-icon.large.icon-left {
+					left: 1em;
+				}
+
+
+			iron-icon.small {
+				height: 18px;
+				width: 18px;
+				margin-top: -9px;
+			}
+				iron-icon.small.icon-right {
+					right: 0.5em;
+				}
+				iron-icon.small.icon-left {
+					left: 0.5em;
+				}
+		</style>
+
+		<template is="dom-if" if="{{icon}}">
+			<iron-icon class$="[[_computeClass(size, icon, iconPosition)]]" icon="[[icon]]"></iron-icon>
+		</template>
+
+		<input class$="[[_computeClass(size, icon, iconPosition)]]" type="[[type]]" disabled="[[disabled]]" placeholder="[[placeholder]]" autocapitalize$="[[autoCapitalize]]" autocorrect$="[[autoCorrect]]" value="{{value::input}}" id="input" />
+	</template>
+
+	<script>
+		'use strict';
+		
+		class SonnetInput extends Polymer.Element {
+			static get is () {
+				return 'sonnet-input';
+			}
+			
+			static get properties () {
+				return {
+					size: {
+						type: String,
+						value: 'medium'
+					},
+					disabled: {
+						type: Boolean,
+						value: false,
+						reflectToAttribute: true
+					},
+					foreground: {
+						type: String,
+						value: '#000'
+					},
+					background: {
+						type: String,
+						value: 'transparent'
+					},
+					placeholder: {
+						type: String,
+						value: '',
+						reflectToAttribute: true
+					},
+					autoCorrect: {
+						type: String,
+						value: 'on'
+					},
+					autoCapitalize: {
+						type: String,
+						value: 'sentences'
+					},
+					type: {
+						type: String,
+						value: 'text',
+						reflectToAttribute: true
+					},
+					value: {
+						type: String,
+						value: '',
+						notify: true,
+						reflectToAttribute: true
+					},
+					icon: {
+						type: String,
+						value: null
+					},
+					iconPosition: {
+						type: String,
+						value: 'left'
+					}
+				};
+			}
+
+			_computeClass (size, icon, iconPosition) {
+				var classString = '';
+
+				if (size) {
+					classString += size;
+				}
+
+				if (icon) {
+					if (iconPosition === 'left') {
+						classString += ' icon-left';
+					} else if (iconPosition === 'right') {
+						classString += ' icon-right';
+					}
+				}
+
+				return classString;
+			}
+
+			focus () {
+				this.$.input.focus();
+			}
+
+			blur () {
+				this.$.input.blur();
+			}
+		}
+
+		window.customElements.define(SonnetInput.is, SonnetInput);
+	</script>
+</dom-module>

@@ -1,0 +1,248 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+
+<dom-module id="sonnet-image-processor">
+    <template>
+        <style>
+        :host {
+            display: inline-block;
+            height: 100%;
+            width: 100%;
+        }
+
+        .input-container {
+            position: relative;
+            height: 100%;
+            width: 100%;
+        }
+
+        input#input {
+            display: block;
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 100%;
+            opacity: 0;
+            z-index: 1000;
+            border-radius: 0;
+        }
+        </style>
+    </template>
+
+<script>
+'use strict';
+
+class SonnetImageProcessor extends Polymer.Element {
+    static get is () {
+        return 'sonnet-image-processor';
+    }
+    
+    static get properties () {
+        return {
+            crop: {
+                type: Boolean,
+                value: false
+            },
+            
+            cropConfig : {
+                type: Object,
+                value: function () {
+                    return {
+                        x: 100,
+                        y: 100,
+                        qualityRatio: 0.5
+                    }
+                }
+            },
+            
+            scale: {
+                type: Boolean,
+                value: false
+            },
+            
+            scaleRatio: {
+                type: Number,
+                value: 1
+            },
+
+            capture: {
+                type: String,
+                value: '',
+                notify: true
+            },
+
+            disabled: {
+                type: Boolean,
+                value: false,
+                reflectToAttribute: true
+            }
+        };
+    }
+    
+    constructor () {
+        super();
+    }
+    
+    ready () {
+        super.ready();
+    }
+    
+    _calculateCropParams (imgObj, desiredWidth, desiredHeight) {
+        // resize the smaller side to desired length and take the square center portion
+        // TODO: handle cases when desired < img width/height
+        var sx, sy,
+            sWidth, sHeight;
+        var dx = 0;
+        var dy = 0;
+        var dWidth = desiredWidth;
+        var dHeight = desiredHeight;
+        
+        if (imgObj.width <= imgObj.height) {
+            sx = 0;
+            sy = (imgObj.height - imgObj.width) / 2;
+            sWidth = imgObj.width;
+            sHeight = sWidth;
+        }
+        else {
+            sx = (imgObj.width - imgObj.height) / 2;
+            sy = 0;
+            sHeight = imgObj.height;
+            sWidth = sHeight;
+            
+        }
+        
+        return { 
+            sx: sx, 
+            sy: sy,
+            sWidth: sWidth,
+            sHeight: sHeight,
+            dx: dx,
+            dy: dy,
+            dWidth: dWidth,
+            dHeight: dHeight
+        };
+    }
+    
+    _cropToB64 (imgObj, newWidth, newHeight, qualityRatio) {
+        // set up canvas for thumbnail
+        var cropCanvas = document.createElement('canvas');
+        var cropCanvasContext = cropCanvas.getContext('2d');
+        cropCanvas.width = newWidth; cropCanvas.height = newHeight;
+        
+        /* use the sourceCanvas to duplicate the entire image. This step was crucial for iOS4 and under devices. */
+        var bufferCanvas = document.createElement('canvas');
+        var bufferContext = bufferCanvas.getContext('2d');
+        bufferCanvas.width = imgObj.width;
+        bufferCanvas.height = imgObj.height;
+        bufferContext.drawImage(imgObj, 0, 0);
+        
+        /* now we use the drawImage method to take the pixels from our bufferCanvas and draw them into our thumbnail canvas */
+        // args: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
+        // visual: https://mdn.mozillademos.org/files/225/Canvas_drawimage.jpg
+        var drawParams = this._calculateCropParams(imgObj, newWidth, newHeight);
+        cropCanvasContext.drawImage(
+            bufferCanvas,                           // source
+            drawParams.sx, drawParams.sy,           
+            drawParams.sWidth, drawParams.sHeight,
+            drawParams.dx, drawParams.dy,           
+            drawParams.dWidth, drawParams.dHeight
+        );
+        
+        return cropCanvas.toDataURL('image/jpeg', qualityRatio);
+    }
+    
+    _scaleImage (imgObj, scaleRatio) {
+        var scaleCanvas = document.createElement('canvas');
+        var scaleCanvasContext = scaleCanvas.getContext('2d');
+        scaleCanvas.width = scaleRatio * imgObj.width;
+        scaleCanvas.height = scaleRatio * imgObj.height;
+        
+        /* use the sourceCanvas to duplicate the entire image. This step was crucial for iOS4 and under devices. */
+        var bufferCanvas = document.createElement('canvas');
+        var bufferContext = bufferCanvas.getContext('2d');
+        bufferCanvas.width = imgObj.width;
+        bufferCanvas.height = imgObj.height;
+        bufferContext.drawImage(imgObj, 0, 0);
+        
+        scaleCanvasContext.drawImage(
+            bufferCanvas,                           // source
+            0, 0,           
+            bufferCanvas.width, bufferCanvas.height,
+            0, 0,           
+            scaleCanvas.width, scaleCanvas.height
+        );
+        return scaleCanvas.toDataURL('image/jpeg', 1);
+    }
+
+    _checkFileSupport () {
+        if (window.File && window.FileReader && window.FileList && window.Blob) {
+            console.log('File APIs are fully supported by this browser. Wew lad');
+        } else {
+            console.log('The File APIs are not fully supported in this browser.');
+        }       
+    }
+    
+    _handleFileUpload (uploadEvent) {
+        var files = uploadEvent.target.files; // FileList object
+
+        var image = files[0];
+        
+        var reader = new FileReader();
+
+        reader.onload = (readerEvent) => {
+            if (this.crop) {
+                console.log("returning cropped image");
+                var imgObject = new Image();
+
+                imgObject.onload = (e) => {
+                    // done loading, process
+                    var base64Img = this._cropToB64(imgObject, this.cropConfig.x, this.cropConfig.y, this.cropConfig.qualityRatio);
+                    
+
+                    this.dispatchEvent(new CustomEvent('sonnet-image-processor', {
+                        detail: base64Img
+                    }));
+                    
+                };
+                
+                imgObject.src = readerEvent.target.result;
+            }
+            else if (this.scale) {
+                var imgObject = new Image();
+
+                imgObject.onload = (e) => {
+                    // done loading, process
+                    var base64Img = this._scaleImage(imgObject, this.scaleRatio);
+
+                    this.dispatchEvent(new CustomEvent('sonnet-image-processor', {
+                        detail: base64Img
+                    }));
+                    
+                };
+                
+                imgObject.src = readerEvent.target.result;
+            }
+            else {
+                console.log("returning raw image");
+                this.dispatchEvent(new CustomEvent('sonnet-image-processor', {
+                    detail: readerEvent.target.result
+                }));
+            }
+        };
+        
+        reader.readAsDataURL(image);
+    }
+    
+    _defaultFileProcessor (dataUrl, callback) {
+        console.log("SonnetFileUpload: This is the default file processor method. If you are not testing, you may want to override this.");
+        console.log("This function will now run the provided callback with the data URL of the uploaded file.");
+        console.log("DataURL:");
+        console.log(dataUrl);
+        
+        callback(dataUrl);
+    }
+}
+
+window.customElements.define(SonnetImageProcessor.is, SonnetImageProcessor);
+</script>
+</dom-module>

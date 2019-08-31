@@ -1,0 +1,264 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+
+<dom-module id="sonnet-sos-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+				position: relative;
+				
+				-webkit-user-select: none; /* Safari */        
+				-moz-user-select: none; /* Firefox */
+				-ms-user-select: none; /* IE10+/Edge */
+				user-select: none; /* Standard */
+			}
+
+			#container {
+				/* height: 100%;
+				width: 100%; */
+				/* padding: 50px 0; */
+			}
+
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			#sos-button {
+				height: 200px;
+				width: 200px;
+				background: #c9312e;
+				border-radius: 125px;
+				font-size: 18px;
+				box-shadow: none;
+				border: 15px solid #ecf0f1;
+				color: #fff;
+				font-weight: bold;
+			}
+			
+			#reset-button {
+				height: 100px;
+				width: 250px;
+				background: #4caf50;
+				border-radius: 0px;
+				box-shadow: none;
+				border: none;
+			}
+			
+			.sos-control:focus {
+				outline: 0;
+			}
+
+			#sos-caption {
+				font-family: monospace;
+				font-size: 25px;
+				color: #7f8c8d;
+				margin-bottom: 20px;
+			}
+
+			span.sos-on {
+				color: #27ae60;
+				font-family: monospace;
+			}
+
+			span.sos-off {
+				color: #7f8c8d;
+				font-family: monospace;
+			}
+			
+			.hidden {
+				display: none!important;
+			}
+
+			#outer-wrapper {
+				height: 100%;
+			}
+
+			#inner-wrapper {
+				width: 100%;
+			}
+		</style>
+
+		<div class="page-body flex vertical layout">
+			<sonnet-page-header>
+				<div class="title">SOS</div>
+			</sonnet-page-header>
+
+			<div id="container" class="flex">
+				<div id="outer-wrapper" class="vertical center-justified layout center">
+					<div id="sos-caption">SOS Mode: <span class$="{{_computeStatusClass(sosMode)}}">{{_computeStatus(sosMode)}}</span></div>
+						
+					<button id="sos-button" class="sos-control" on-tap="_onSosBtnTap" on-up="_onSosBtnUp" on-down="_onSoSBtnDown">{{_computeSosBtnLabel(sosMode, sosCounter)}}</button>
+				</div>
+			</div>
+		</div>
+
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetSosPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-sos-page';
+			}
+
+			static get properties () {
+				return {
+					sosMode: {
+						type: Boolean,
+						value: false,
+						observer: '_sosModeHandler'
+					},
+					sosCounter: {
+						type: Number,
+						value: 5,
+						observer: '_sosCounterListener'
+					},
+					sosMessageText: {
+						type: String,
+						value: "SOS!! I need help!!"
+					},
+					// displayName: {
+					// 	type: String,
+					// 	notify: true
+					// }
+					currentUser: {
+						type: Object,
+						value: {}
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+			
+			ready () {
+				super.ready();
+				this.defaultSosCounter = this.sosCounter;
+			}
+
+			_computeStatus (sosMode) {
+				return sosMode ? 'ON' : 'OFF';
+			}
+
+			_computeSosBtnLabel (sosMode, sosCounter) {
+				var buttonLabel = '';
+
+				if (sosMode) {
+					buttonLabel = 'Hold to Deactivate'
+				} else {
+					buttonLabel = 'Tap ' + sosCounter + ' Times to Activate';
+				}
+
+				return buttonLabel;
+			}
+
+			_computeStatusClass (sosMode) {
+				return sosMode ? 'sos-on' : 'sos-off';
+			}
+			
+			_onSosBtnTap () {
+				if (this.sosCounter > 0) {
+					this.sosCounter -= 1;
+				}
+			}
+
+			_onSosBtnUp () {
+				console.log('up');
+
+				if (this.holdTimeout) {
+					clearTimeout(this.holdTimeout);
+					this.holdTimeout = null;
+				}
+			}
+
+			_onSoSBtnDown () {
+				console.log('down');
+
+				this.holdTimeout = setTimeout(() => {
+					// turn off sos if held
+					if (this.sosMode) {
+						this.set('sosMode', false);
+						this.set('sosCounter', 5);
+					}
+
+					this.holdTimeout = null;
+				}, 3000);
+			}
+			
+			_sosCounterListener (newVal, oldVal) {				
+				if (newVal === 0) {
+					this.sosMode = true;
+				}
+			}
+			
+			_sosModeHandler (newState, oldState) {
+				if (newState === true) {
+					this._sendSosMessage();
+					this.sosSetTimeout = setInterval(this._sendSosMessage.bind(this), 60000);
+				} else {
+					clearInterval(this.sosSetTimeout);
+				}
+			}
+			
+			_sendSosMessage () {
+				if (navigator.geolocation) {
+					navigator.geolocation.getCurrentPosition((position) => {
+						this.loadService('sonnet-message-service')
+						.then((messageService) => {
+							let payload = [
+								this.currentUser.userId,
+								this.currentUser.displayName,
+								String(position.coords.latitude),
+								String(position.coords.longitude),
+								String(position.coords.altitude)
+							];
+							
+							// TEMP: only for video!
+							messageService.sendSosMessage(payload);
+						});
+					}, (err) => {
+						alert('Unable to receive geolocation data.');
+					});
+				} else {
+					alert('HTML5 Geolocation not supported.');
+				}
+			}
+			
+			_onResetBtnTap () {
+				this._resetSosCounter();
+				this.$['reset-button'].classList.add('hidden');
+			}
+			
+			_resetSosCounter () {
+				this.sosCounter = this.defaultSosCounter;
+				this.sosMode = false;
+			}
+			
+			_decrementSosCounter () {
+				this.sosCounter -= 1;
+			}
+		}
+
+		window.customElements.define(SonnetSosPage.is, SonnetSosPage);
+	</script>
+</dom-module>

@@ -1,0 +1,133 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+
+<dom-module id="sonnet-socket-service">
+	<script>
+		'use strict';
+		
+		class SonnetSocketService extends SonnetAbstractService {
+
+			static get is () {
+				return 'sonnet-socket-service';
+			}
+
+			static get properties () {
+				return {
+					serviceName: {
+						type: String,
+						value: 'socketService'
+					}
+				};
+			}
+
+			constructor () {
+				super();
+
+				this._heartbeatInterval = null;
+
+				this.socketUrl = 'wss://app.sonnetlabs.com/ws';	// window.location.host is null in iOS cordova
+
+				this.createNewSocketPromise();
+			}
+
+			ready () {
+				super.ready();
+			}
+
+			openConnection (user) {
+				return new Promise((resolve, reject) => {
+					var socket = new WebSocket(this.socketUrl);
+
+					socket.addEventListener('open', (event) => {
+						console.log('socket connection opened')
+						this.sendData({
+							source: user.id,
+							destination: '',
+							type: 'init',
+							payload: [
+								user.id,
+								user.name,
+								user.icon
+							],
+							timestamp: new Date()
+						});
+
+						this._resolve(socket);
+						resolve();
+						
+						this.dispatchEvent(new CustomEvent('s-socket-status', { detail: true }));
+					});
+
+					// Whenever a message is received, trigger an event, then other pages/services can register event listeners
+					socket.onmessage = (event) => {
+						var data = JSON.parse(event.data);
+
+						console.log('Socket onmessage: ', data);
+
+						if (data.type) {
+							this.dispatchEvent(new CustomEvent(data.type, {
+								detail: data
+							}));
+						}
+					};
+
+					// TODO: add a function to listen to connection close and kick user out
+					socket.onclose = (event) => {
+						console.log('socketService: onclose');
+						// location.reload();
+
+						// this.loadService('sonnet-session-service')
+						// 	.then((sessionService) => {
+						// 		sessionService.logout();
+						// 	});
+						
+						reject(new Error('Socket connection closed before opening'));
+						this.dispatchEvent(new CustomEvent('s-socket-status', { detail: false }));
+					}
+					
+					socket.onerror = (event) => {
+						console.log('Socket error');
+						console.log(event)
+						reject(new Error('Socket error'));
+					}
+				})
+			}
+			
+			createNewSocketPromise () {
+				this.socketPromise = new Promise((resolve, reject) => {
+					this._resolve = resolve;
+				});
+			}
+
+			_getSocket () {
+				return this.socketPromise;
+			}
+
+			closeConnection () {
+				this._getSocket()
+				.then(socket => {
+					socket.close()
+				})
+			}
+
+			sendData (data) {
+				if (!data) {
+					return;
+				}
+
+				if (typeof data === 'object') {
+					data = JSON.stringify(data);
+				}
+
+				this._getSocket()
+					.then((socket) => {
+						socket.send(data);
+					});
+			}
+		}
+
+		window.customElements.define(SonnetSocketService.is, SonnetSocketService);
+	</script>
+</dom-module>

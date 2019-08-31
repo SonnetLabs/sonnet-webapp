@@ -1,0 +1,55 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-image-processor.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+<dom-module id="sonnet-image-upload">
+    <template>
+        <style include="sonnet-image-processor">
+        :host {
+            display: inline-block;
+            height: 100%;
+            width: 100%;
+        }
+        </style>
+
+        <div class="input-container">
+            <input id="input" name="input" type="file" accept="image/*" capture="{{capture}}" disabled="[[disabled]]" />
+
+            <label for="input">
+                <slot></slot>
+            </label>
+        </div>
+    </template>
+
+<script>
+'use strict';
+
+class SonnetImageUpload extends SonnetImageProcessor {
+    static get is () {
+        return 'sonnet-image-upload';
+    }
+    
+    // static get properties is already defined in SonnetImageProcessor
+    // if overwriting, overwrite them in the ready() callback
+    
+    constructor () {
+        super();
+    }
+    
+    ready () {
+        super.ready();
+
+        this.$.input.addEventListener('change', (event) => {
+            this._handleFileUpload(event)
+        }, false);
+    }
+}
+
+window.customElements.define(SonnetImageUpload.is, SonnetImageUpload);
+</script>
+</dom-module>

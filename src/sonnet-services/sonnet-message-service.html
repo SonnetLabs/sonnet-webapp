@@ -1,0 +1,793 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+
+<dom-module id="sonnet-message-service">
+	<script>
+		'use strict';
+		
+		class SonnetMessageService extends SonnetAbstractService {
+
+			static get is () {
+				return 'sonnet-message-service';
+			}
+
+			static get properties () {
+				return {
+					// [{
+					// 	id: 'p4cz069c',
+					// 	name: 'John Francis',
+					// 	icon: '8271B3773AF6B1CD',
+					// 	lastMessage: 'Monday is probably best.',
+					// 	timestamp: new Date()
+					// }]
+					chats: {
+						type: Array,
+						notify: true,
+						value: []
+					},
+					// CurrentChat needs to be a full object, not a computed object because async modification will be made on it
+					currentChat: {
+						type: Object,
+						value: {},
+						notify: true
+					},
+					currentChatName: {
+						type: String,
+						value: '',
+						notify: true
+					},
+					currentChatLog: {
+						type: Array,
+						value: [],
+						notify: true
+					},
+					chatMsgChunkSize: {
+						type: Number,
+						value: 20
+					},
+					currentMessageOffset: {
+						type: Number,
+						value: 0
+					},
+					// userId: {
+					// 	type: String,
+					// 	value: ''
+					// },
+					currentUser: {
+						type: Object,
+						value: {}
+					},
+					tempChats: {
+						type: Object,
+						value: {},
+						notify: true
+					},
+					lastChat: {
+						type: Object,
+						value: null,
+						notify: true
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+
+				// When logged in, load messages
+				this.loadService('sonnet-session-service')
+				.then((sessionService) => {
+					sessionService.addEventListener('login', this._loadChats.bind(this));
+				});
+
+				// Listen to socket service for new messages, etc.
+				this.loadService('sonnet-socket-service')
+				.then((socketService) => {
+					socketService.addEventListener('message', this._onMessage.bind(this));
+					socketService.addEventListener('sos', this._onSos.bind(this));
+				});
+			}
+
+			sendSosMessage (message, recipient) {
+				console.log('sendSosMessage')
+				this.loadService('sonnet-socket-service')
+				.then(socketService => {
+					var data = {
+						source: this.currentUser.userId,
+						// destination: '',
+						type: 'sos',
+						payload: message,
+						timestamp: new Date()
+					};
+					
+					if (recipient) {
+						data.destination = recipient;
+					} else {
+						data.destination = '';
+					}
+					
+					console.log('sending sos message')
+					console.log(data.payload)
+					socketService.sendData(data);
+				});
+			}
+
+			sendMessage (chatId, message) {
+				this.loadService('sonnet-socket-service')
+					.then((socketService) => {
+						var msgPacket = {
+							source: this.currentUser.userId,
+							destination: chatId,
+							type: 'message',
+							payload: message,
+							timestamp: new Date()
+						};
+
+						socketService.sendData(msgPacket);
+
+						let parsedMessage = this._parseMessage(msgPacket.payload);
+						
+						var newMsg = {
+							source: msgPacket.source,
+							destination: msgPacket.destination,
+							chatId: msgPacket.destination,
+							type: msgPacket.payload[0],
+							message: parsedMessage,
+							timestamp: new Date()
+						};
+						
+						// Writing it to IndexedDB
+						// get lastmsgid and increment
+						// TODO: make this its own function
+						this._readChat(newMsg.destination)
+						.then((chatObj) => {
+							var updatedChat = this._updateChatObj(chatObj, newMsg);
+							newMsg.msgId = updatedChat.lastMsgId;
+							
+							// store message
+							this._storeMessage(newMsg);
+							
+							// update chats in db and locally
+							this._updateChats(updatedChat);
+						});
+						
+
+						// Sync it with the current chat log so it shows up on the chat page
+						this.push('currentChatLog', newMsg);
+						this.dispatchEvent(new CustomEvent('new-message', {detail: 
+							{
+								chatId: newMsg.chatId,
+								source: newMsg.source
+							}
+						}));
+					});
+			}
+
+			_readChat (sourceId) {
+				var storageService;
+				return new Promise ((resolve, reject) => {
+					this.loadService('sonnet-storage-service')
+					.then((service) => {
+						storageService = service;
+						
+						return storageService.openUserDb();
+					})
+					.then((userDb) => {
+						var transaction = userDb.transaction('chats', 'readwrite'),
+							chatsTable = transaction.objectStore('chats');
+
+						var getChat = chatsTable.get(sourceId);
+
+						getChat.onsuccess = () => {
+							var chat = null;
+
+							// Chat exists
+							if (getChat.result) {
+								chat = getChat.result;
+								resolve(chat);
+
+							}
+							else {
+								this.createChatObj(sourceId)
+								.then((newChat) => {
+									chatsTable.put(newChat);
+									resolve(newChat);
+								});
+							}
+
+							transaction.oncomplete = (e) => {
+								userDb.close();
+							};
+						};
+					})
+				})
+			}
+
+			_loadChats () {
+				// If there are variables that need to be used again, put them here
+
+				var database,
+					transaction,
+					chatsTable,
+					chats = [];
+
+				this.loadService('sonnet-storage-service')
+				.then((storageService) => {
+					return storageService.openUserDb();
+				})
+				.then((userDb) => {
+					database = userDb;
+					transaction = userDb.transaction(['chats', 'contacts', 'messages'], 'readonly'),
+					chatsTable = transaction.objectStore('chats');
+
+					return new Promise((resolve, reject) => {
+						var request = chatsTable.getAll();
+
+						request.onsuccess = (e) => {
+							resolve(e.target.result);
+						};
+
+						request.onerror = (e) => {
+							reject();
+						};
+					});
+				})
+				.then((chats) => {
+					this.set('chats', chats);
+				});
+			}
+
+			_storeMessage (message) {
+				this.loadService('sonnet-storage-service')
+					.then((storageService) => {
+						return storageService.openUserDb();
+					})
+					.then((userDb) => {
+						var transaction = userDb.transaction('messages', 'readwrite'),
+							messagesTable = transaction.objectStore('messages');
+
+						var request = messagesTable.add(message);
+						request.onsuccess = (e) => {
+							userDb.close();
+						};
+					});
+			}
+
+			_onMessage (event) {
+				// console.log('_onMessage: ', event);
+				var msgPacket = event.detail;
+				var updatedChat;
+
+				let parsedMessage = this._parseMessage(msgPacket.payload)
+				
+				let newMsg = {
+					chatId: '',	// will be filled in later
+					message: parsedMessage,
+					source: msgPacket.source,
+					type: msgPacket.payload[0],
+					timestamp: new Date(msgPacket.timestamp),
+				};
+				
+				// intended for group chat
+				// msg may come when the corresponding chat isn't loaded
+				if (msgPacket.destination === this.currentUser.userId) {
+					newMsg.chatId = msgPacket.source;
+				}
+				else {
+					newMsg.chatId = msgPacket.destination;
+				}
+				
+				// Writing it to IndexedDB
+				// get lastmsgid and increment
+				// TODO: the rest is identical to the stuff in sendMessage, refactor as single function
+				this._readChat(newMsg.chatId)
+				.then((chatObj) => {
+					updatedChat = this._updateChatObj(chatObj, newMsg);
+					newMsg.msgId = updatedChat.lastMsgId;
+					
+					// store message
+					this._storeMessage(newMsg);
+					
+					// update chats in db and locally
+					this._updateChats(updatedChat);
+					
+				})
+				
+				if (this.tempChats[newMsg.chatId] === undefined) {
+					this.tempChats[newMsg.chatId] = [];
+				}
+				
+				
+
+				// If the chatId is the current one, update currentChatLog so messages shows up
+				if (newMsg.chatId === this.currentChat.id) {
+					this.push('currentChatLog', newMsg);
+				} else {
+					this.tempChats[newMsg.chatId].push(newMsg);
+				}
+				
+				this.dispatchEvent(new CustomEvent('new-message', {detail: 
+					{
+						chatId: newMsg.chatId,
+						source: newMsg.source
+					}
+				}));
+				
+				this.loadService('sonnet-notification-service')
+				.then(notificationService => {
+					notificationService.notifyNewMsg(newMsg);
+				});
+			}
+
+			_onSos (event) {
+				console.log('_onSos: got sos message')
+				var sosMessage = event.detail.payload;
+				console.log(sosMessage);
+				
+				let parsed = {
+					id: sosMessage[0],
+					name: sosMessage[1],
+					latitude: sosMessage[2],
+					longitude: sosMessage[3]
+				};
+				
+				if (parsed.id !== this.currentUser.userId) {
+					alert('SOS ALERT!\n\nA SOS distress signal was sent by ' + parsed.name + '. ' + parsed.name + '\'s last known location is:\n- Latitude ' + parsed.latitude + '\n- Longitude ' + parsed.longitude + '\n\nPlease help ' + parsed.name + ' ASAP!');
+				}
+			}
+			
+			// _parseMessage takes a message payload as an array and unmarshals it into an object depending on the message type
+			_parseMessage (message) {
+				let parsed;
+				let type = message[0];
+				
+				switch (type) {
+					case 'text':
+						parsed = message[1];
+						break;
+					case 'image':
+						parsed = message[1];
+						break;
+					case 'location':
+						parsed = {
+							latitude: message[1],
+							longitude: message[2],
+							altitude: message[3],
+                            accuracy: message[4]
+						};
+						break;
+				}
+				
+				return parsed;
+			}
+			
+			// redundant, replaced by _updateChatObj
+			_updateLastMsgId (sourceId) {
+				var storageService;
+				
+				this.loadService('sonnet-storage-service')
+				.then((service) => {
+					storageService = service;
+					return storageService.openUserDb();
+				})
+				.then((userDb) => {
+					var transaction = userDb.transaction('chats', 'readwrite'),
+						chatsTable = transaction.objectStore('chats');
+
+					var getChat = chatsTable.get(sourceId);
+
+					getChat.onsuccess = () => {
+						var chat = null;
+
+						// Chat exists
+						if (getChat.result) {
+							chat = getChat.result;
+							chat.lastMsgId = chat.lastMsgId + 1;
+							chatsTable.put(chat);
+						}
+
+						transaction.oncomplete = (e) => {
+							userDb.close();
+						};
+					};
+				});
+			}
+			
+			loadChat (chat) {
+				this.set('currentChat', chat);
+				this.set('lastChat', chat);
+				return this.initMsgs(chat);
+			}
+			
+			loadChatByContact (contact) {
+				return this.loadChat(contact.id);
+			}
+			
+			getChatById (chatId) {
+				// looks through local chats only for speed
+				let chat;
+				for (let i = 0; i < this.chats.length; i++) {
+					console.log(this.chats[i])
+					if (this.chats[i].id === chatId) {
+						return Promise.resolve(this.chats[i]);
+					}
+				}
+				
+				if (!chat) {
+					let err = new Error('chatId not found: ' + chatId);
+				 	return Promise.reject(err)
+				}
+			}
+			
+			_loadChatMsgs (chatId) {
+				var msgs = [];
+				return new Promise ((resolve, reject) => {
+					var storageService;
+					
+					this.loadService('sonnet-storage-service')
+					.then((service) => {
+						storageService = service;
+						return storageService.openUserDb();
+					})
+					.then((userDb) => {
+						var transaction = userDb.transaction('messages', 'readonly'),
+							messagesTable = transaction.objectStore('messages');
+
+						var index = messagesTable.index('chatId');
+						
+						var singleKeyRange = IDBKeyRange.only(chatId);
+						
+						index.openCursor(singleKeyRange).onsuccess = (e) => {
+							var cursor = event.target.result;
+							if (cursor) {
+								msgs.push(cursor.value);
+								cursor.continue();
+							}
+							else {
+								resolve(msgs);
+							}
+						}
+						
+						transaction.oncomplete = (e) => {
+							userDb.close();
+						}
+					});
+				});
+			}
+			
+			loadEarlierMsgsChunk (chunkSize) {
+				return new Promise((resolve, reject) => {
+					// update offset in case new messages have arrived
+					if (this.currentChatLog.length > 0) {
+						var lastMsg = this.currentChatLog[this.currentChatLog.length - 1];
+						var earliestMsg = this.currentChatLog[0];
+						
+						this.currentChatOffset = lastMsg.msgId - earliestMsg.msgId + 1;
+					}
+					else {
+						this.currentChatOffset = 0;
+					}
+					
+					this._loadMsgsChunk(this.currentChat.id, chunkSize, this.currentChatOffset)
+					.then((earlierMsgs) => {
+						if (earlierMsgs.length > 0) {
+							var newChatLog = earlierMsgs.concat(this.currentChatLog);
+							this.set('currentChatLog', newChatLog);
+							resolve();
+						}
+					})
+				})
+				
+			}
+			
+			_loadMsgsChunk (chatId, chunkSize, offset) {
+				return new Promise((resolve, reject) => {
+					var counter = chunkSize;
+					var msgsChunk = [];
+					
+					this.loadService('sonnet-storage-service')
+					.then((storageService) => {
+						return storageService.openUserDb();
+					})
+					.then((userDb) => {
+						var transaction = userDb.transaction('messages', 'readonly'),
+							messagesTable = transaction.objectStore('messages');
+
+						var index = messagesTable.index('chatId');
+						var singleKeyRange = IDBKeyRange.only(chatId);
+	
+						index.openCursor(singleKeyRange, 'prev').onsuccess = (e) => {
+							var cursor = event.target.result;
+							if (cursor && counter > 0) {
+								// if loading another chunk of same chat, we have to skip from the back
+
+								if (offset > 0) {
+									offset--;
+								}
+								else {
+									
+									msgsChunk.unshift(cursor.value);
+									counter--;
+								}
+								cursor.continue();
+
+							}
+						};
+
+						transaction.oncomplete = (e) => {
+							userDb.close();
+							resolve(msgsChunk);
+						};
+					});
+				});
+			}
+			
+			_clearMsgList () {
+				this.set('currentChatLog', []);
+			}
+			
+			// currently the message 'init' function and drawer
+			renderMsgList (chatId) {
+				// this._clearMsgList();
+				this.currentChatOffset = 0;
+				return this.loadEarlierMsgsChunk(this.chatMsgChunkSize); // chatid, chunksize, offset
+				// .then((msgs) => {
+				// 	this.set('currentChatLog', msgs);
+				// });
+			}
+			
+			sendSelfMsg (sourceId, message) {
+				var dummyEvent = {
+					detail: {
+						destination: this.currentUser.userId,
+						payload: [
+							"text",
+							message
+						],
+						source: sourceId,
+						type: 'message',
+						timestamp: new Date()
+					}
+				};
+				
+				this._onMessage(dummyEvent);
+			}
+			
+			getLastMsg (chatId) {
+				return new Promise ((resolve, reject) => {
+					var storageService;
+					
+					this.loadService('sonnet-storage-service')
+					.then((service) => {
+						storageService = service;
+						return storageService.openUserDb();
+					})
+					.then((userDb) => {
+						var transaction = userDb.transaction('messages', 'readonly'),
+							messagesTable = transaction.objectStore('messages');
+							
+						var index = messagesTable.index('chatId');
+
+						var singleKeyRange = IDBKeyRange.only(chatId);
+						
+						var lastMsg = null;
+
+						index.openCursor(singleKeyRange, 'prev').onsuccess = (e) => {
+							var cursor = event.target.result;
+							if (cursor.value) {
+								lastMsg = cursor.value;
+							}
+						};
+
+						transaction.oncomplete = (e) => {
+							userDb.close();
+							resolve(lastMsg);
+						};
+					});
+				});
+			}
+			
+			_showLocalChats () {
+				console.log('messageService._showLocalChats: local chats:');
+				console.log(this.chats);
+			}
+			
+			_showSavedChats () {
+				this.loadService('sonnet-storage-service')
+				.then((storageService) => {
+					return storageService.openUserDb();
+				})
+				.then((userDb) => {
+					var transaction = userDb.transaction('chats', 'readwrite'),
+						chatsTable = transaction.objectStore('chats');
+
+					var getChat = chatsTable.getAll();
+
+					return new Promise((resolve, reject) => {
+						getChat.onsuccess = () => {
+
+							var chat = getChat.result;
+							console.log('messageService._showSavedChats: saved chats:');
+							console.log(chat);
+
+							transaction.oncomplete = (e) => {
+								userDb.close();
+								
+							};
+						};
+					});
+				})
+			}
+			
+			// this holds all the fields that chats should have
+			// TODO: will need adjustment for groups later
+			createChatObj(newChatId, options) {
+				
+				var contactService;
+				
+				return new Promise((resolve, reject) => {
+					// TODO: only create chat if it does not exist
+					
+					var bIsGroup = false;
+					var firstMessage = null;
+					
+					if (options) { 
+						bIsGroup = options.group; 
+						firstMessage = options.firstMessage;
+					}
+					
+					var newChat = {
+						created: new Date(),
+						group: bIsGroup,
+						icon: '',			// will be filled in later
+						id: newChatId,
+						lastMsgId: -1,
+						lastMessage: '',
+						read: false,
+						name: '',			// will be filled in later
+						timestamp: ''
+					};
+					
+					if (firstMessage) {
+						newChat.lastMsgId = 0;
+						newChat.lastMessage = firstMessage.payload;
+						newChat.timestamp = new Date(firstMessage.timestamp);
+					}
+					
+					// probably needs to change for groups
+					this.loadService('sonnet-contact-service')
+					.then((service) => {
+						contactService = service;
+						var contact = contactService.getContactById(newChatId);
+						
+						newChat.icon = contact.icon;
+						newChat.name = contact.name;
+						resolve(newChat);
+					})
+				})
+			}
+			
+			_updateChatObj (chatObj, newMessage) {
+			    var updatedChat;
+				// console.log('messageService._updateChatObj: newMessage:');
+				// console.log(newMessage);
+	            updatedChat = chatObj;
+				updatedChat.lastMsgId = chatObj.lastMsgId + 1;
+	            updatedChat.lastMessage = newMessage;
+	            updatedChat.timestamp = new Date(newMessage.timestamp);
+				
+				let currentChatId = this.currentChat.id || '';
+				
+				
+				if (newMessage.chatId === currentChatId) {
+					updatedChat.read = true;
+				}
+				else {
+					updatedChat.read = false;
+				}
+		            
+	            return updatedChat;
+			}
+			
+			_updateChats (updatedChat) {
+				return new Promise((resolve, reject) => {
+					this._updateChatInDb(updatedChat)
+			        .then(() => {
+			            this._updateChatsLocally(updatedChat);
+						resolve();
+			        });
+				})
+			}
+
+			_updateChatInDb (updatedChat) {
+			    var storageService;
+			    return new Promise ((resolve, reject) => {
+			        this.loadService('sonnet-storage-service')
+			        .then((service) => {
+			            storageService = service;
+			            
+			            return storageService.openUserDb();
+			        })
+			        .then((userDb) => {
+			            var transaction = userDb.transaction('chats', 'readwrite'),
+			                chatsTable = transaction.objectStore('chats');
+
+			            var putChat = chatsTable.put(updatedChat);
+
+			            putChat.onsuccess = () => {
+			                resolve();
+
+			                transaction.oncomplete = (e) => {
+			                    userDb.close();
+			                };
+			            };
+			        })
+			    });
+			}
+
+			_updateChatsLocally (chat) {
+			    // needs to be able to run in background where this.currentChat.id may not match message.chatId
+				var bChatFound = false;
+				var index;
+			    for (let i = 0; i < this.chats.length; i++) {
+			        if (this.chats[i].id === chat.id) {
+			            bChatFound = true;
+						index = i;
+						break;
+			        }
+			    }
+				
+				if (bChatFound) {
+					this.splice('chats', index, 1, chat);
+					
+				}
+				else {
+					// not found
+					this.push('chats', chat);
+				}
+				
+				return;
+			}
+			
+			// for use only when opening chat pages and marking as read
+			// do not use during message event handlers, all logic is in there already
+			// TODO: separate these operations into plain modifiers without CRUD, then pass the completed object to the CRUD op
+			_setChatReadStatus (chatId, bRead) {
+				var updatedChat;
+				return new Promise((resolve, reject) => {
+					this._readChat(chatId)
+					.then((chatObj) => {
+						updatedChat = chatObj;
+						updatedChat.read = bRead;
+						return this._updateChatInDb(updatedChat);
+					})
+					.then(() => {
+						this._updateChatsLocally(updatedChat);
+						resolve();
+					});
+				})
+            
+			}
+			
+			// TODO: chat is only needed for id; change so it takes chat.id only
+			initMsgs (chat) {
+				this.set('currentChatOffset', 0);
+				return new Promise((resolve, reject) => {
+					this._loadMsgsChunk(chat.id, this.chatMsgChunkSize, 0)
+					.then((earlierMsgs) => {
+						this.set('currentChatLog', earlierMsgs);
+						resolve();
+					});
+					// TODO: reject handler
+				});
+			}
+		}
+
+		window.customElements.define(SonnetMessageService.is, SonnetMessageService);
+	</script>
+</dom-module>

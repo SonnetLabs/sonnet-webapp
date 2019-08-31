@@ -1,0 +1,312 @@
+<!-- 
+Kitchen Sink
+
+Create your elements then import and test them here.
+-->
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-tab-bar.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-image-upload.html" />
+<link rel="import" href="../sonnet-elements/sonnet-map-list.html" />
+
+
+
+<dom-module id="kitchen-sink">
+	<template>
+	<style include="sonnet-styles">
+	:host {
+		display: block;
+		height: 100%;
+		width: 100%;
+	}
+	
+	.title {
+		font-size: 1.25em;
+		font-weight: bold;
+	}
+	
+	sonnet-button {
+		padding: 13px;
+		--sonnet-button-padding: 0;
+	}
+	
+	#page {
+		height: 100%;
+	}
+	
+	#container {
+		
+		height: 100%;
+		width: 100%;
+		/*height: 100%;*/
+		/*position: static;*/
+		/*overflow: hidden;*/
+	}
+	
+	.test {
+		height: 100px;
+		width: 100px;
+		background-color: #dddddd;
+	}
+	</style>
+	
+	<div id="page" page="kitchen-sink" class="full-size vertical layout center">
+		
+		<sonnet-page-header>
+			<div class="title">Kitchen Sink</div>
+			<div slot="right">
+				<sonnet-button>
+					<iron-icon icon="sonnet:cross" on-click="closePage"></iron-icon>
+				</sonnet-button>
+			</div>
+		</sonnet-page-header>
+		
+		
+		<div id="container" class="flex">
+			<!-- <sonnet-image-upload crop crop-config="[[cropConfig]]" quality="80"> -->
+			<div>
+				<sonnet-image-upload crop crop-config="[[cropConfig]]" quality="80">
+					<div class="test">
+						saved photo upload
+					</div>
+				</sonnet-image-upload>
+			</div>
+			<div>
+				<sonnet-image-upload camera crop crop-config="[[cropConfig]]" quality="80">
+					<div class="test">
+						camera upload
+					</div>
+				</sonnet-image-upload>
+			</div>
+			
+			<!-- <div id="all-icons">
+				<iron-icon icon="sonnet:eye"></iron-icon>
+				<iron-icon icon="sonnet:paper-clip"></iron-icon>
+				<iron-icon icon="sonnet:mail"></iron-icon>
+				<iron-icon icon="sonnet:toggle"></iron-icon>
+				<iron-icon icon="sonnet:layout"></iron-icon>
+				<iron-icon icon="sonnet:link"></iron-icon>
+				<iron-icon icon="sonnet:bell"></iron-icon>
+				<iron-icon icon="sonnet:lock"></iron-icon>
+				<iron-icon icon="sonnet:unlock"></iron-icon>
+				<iron-icon icon="sonnet:ribbon"></iron-icon>
+				<iron-icon icon="sonnet:image"></iron-icon>
+				<iron-icon icon="sonnet:signal"></iron-icon>
+				<iron-icon icon="sonnet:target"></iron-icon>
+				<iron-icon icon="sonnet:clipboard"></iron-icon>
+				<iron-icon icon="sonnet:clock"></iron-icon>
+				<iron-icon icon="sonnet:watch"></iron-icon>
+				<iron-icon icon="sonnet:air-play"></iron-icon>
+				<iron-icon icon="sonnet:camera"></iron-icon>
+				<iron-icon icon="sonnet:video"></iron-icon>
+				<iron-icon icon="sonnet:disc"></iron-icon>
+				<iron-icon icon="sonnet:printer"></iron-icon>
+				<iron-icon icon="sonnet:monitor"></iron-icon>
+				<iron-icon icon="sonnet:server"></iron-icon>
+				<iron-icon icon="sonnet:cog"></iron-icon>
+				<iron-icon icon="sonnet:heart"></iron-icon>
+				<iron-icon icon="sonnet:paragraph"></iron-icon>
+				<iron-icon icon="sonnet:align-justify"></iron-icon>
+				<iron-icon icon="sonnet:align-left"></iron-icon>
+				<iron-icon icon="sonnet:align-center"></iron-icon>
+				<iron-icon icon="sonnet:align-right"></iron-icon>
+				<iron-icon icon="sonnet:book"></iron-icon>
+				<iron-icon icon="sonnet:layers"></iron-icon>
+				<iron-icon icon="sonnet:stack"></iron-icon>
+				<iron-icon icon="sonnet:stack-2"></iron-icon>
+				<iron-icon icon="sonnet:paper"></iron-icon>
+				<iron-icon icon="sonnet:paper-stack"></iron-icon>
+				<iron-icon icon="sonnet:search"></iron-icon>
+				<iron-icon icon="sonnet:zoom-in"></iron-icon>
+				<iron-icon icon="sonnet:zoom-out"></iron-icon>
+				<iron-icon icon="sonnet:reply"></iron-icon>
+				<iron-icon icon="sonnet:circle-plus"></iron-icon>
+				<iron-icon icon="sonnet:circle-minus"></iron-icon>
+				<iron-icon icon="sonnet:circle-check"></iron-icon>
+				<iron-icon icon="sonnet:circle-cross"></iron-icon>
+				<iron-icon icon="sonnet:square-plus"></iron-icon>
+				<iron-icon icon="sonnet:square-minus"></iron-icon>
+				<iron-icon icon="sonnet:square-check"></iron-icon>
+				<iron-icon icon="sonnet:square-cross"></iron-icon>
+				<iron-icon icon="sonnet:microphone"></iron-icon>
+				<iron-icon icon="sonnet:record"></iron-icon>
+				<iron-icon icon="sonnet:skip-back"></iron-icon>
+				<iron-icon icon="sonnet:rewind"></iron-icon>
+				<iron-icon icon="sonnet:play"></iron-icon>
+				<iron-icon icon="sonnet:pause"></iron-icon>
+				<iron-icon icon="sonnet:stop"></iron-icon>
+				<iron-icon icon="sonnet:fast-forward"></iron-icon>
+				<iron-icon icon="sonnet:skip-forward"></iron-icon>
+				<iron-icon icon="sonnet:shuffle"></iron-icon>
+				<iron-icon icon="sonnet:repeat"></iron-icon>
+				<iron-icon icon="sonnet:folder"></iron-icon>
+				<iron-icon icon="sonnet:umbrella"></iron-icon>
+				<iron-icon icon="sonnet:moon"></iron-icon>
+				<iron-icon icon="sonnet:thermometer"></iron-icon>
+				<iron-icon icon="sonnet:drop"></iron-icon>
+				<iron-icon icon="sonnet:sun"></iron-icon>
+				<iron-icon icon="sonnet:cloud"></iron-icon>
+				<iron-icon icon="sonnet:cloud-upload"></iron-icon>
+				<iron-icon icon="sonnet:cloud-download"></iron-icon>
+				<iron-icon icon="sonnet:upload"></iron-icon>
+				<iron-icon icon="sonnet:download"></iron-icon>
+				<iron-icon icon="sonnet:location"></iron-icon>
+				<iron-icon icon="sonnet:location-2"></iron-icon>
+				<iron-icon icon="sonnet:map"></iron-icon>
+				<iron-icon icon="sonnet:battery"></iron-icon>
+				<iron-icon icon="sonnet:head"></iron-icon>
+				<iron-icon icon="sonnet:briefcase"></iron-icon>
+				<iron-icon icon="sonnet:speech-bubble"></iron-icon>
+				<iron-icon icon="sonnet:anchor"></iron-icon>
+				<iron-icon icon="sonnet:globe"></iron-icon>
+				<iron-icon icon="sonnet:box"></iron-icon>
+				<iron-icon icon="sonnet:reload"></iron-icon>
+				<iron-icon icon="sonnet:share"></iron-icon>
+				<iron-icon icon="sonnet:marquee"></iron-icon>
+				<iron-icon icon="sonnet:marquee-plus"></iron-icon>
+				<iron-icon icon="sonnet:marquee-minus"></iron-icon>
+				<iron-icon icon="sonnet:tag"></iron-icon>
+				<iron-icon icon="sonnet:power"></iron-icon>
+				<iron-icon icon="sonnet:command"></iron-icon>
+				<iron-icon icon="sonnet:alt"></iron-icon>
+				<iron-icon icon="sonnet:esc"></iron-icon>
+				<iron-icon icon="sonnet:bar-graph"></iron-icon>
+				<iron-icon icon="sonnet:bar-graph-2"></iron-icon>
+				<iron-icon icon="sonnet:pie-graph"></iron-icon>
+				<iron-icon icon="sonnet:star"></iron-icon>
+				<iron-icon icon="sonnet:arrow-left"></iron-icon>
+				<iron-icon icon="sonnet:arrow-right"></iron-icon>
+				<iron-icon icon="sonnet:arrow-up"></iron-icon>
+				<iron-icon icon="sonnet:arrow-down"></iron-icon>
+				<iron-icon icon="sonnet:volume"></iron-icon>
+				<iron-icon icon="sonnet:mute"></iron-icon>
+				<iron-icon icon="sonnet:content-right"></iron-icon>
+				<iron-icon icon="sonnet:content-left"></iron-icon>
+				<iron-icon icon="sonnet:grid"></iron-icon>
+				<iron-icon icon="sonnet:grid-2"></iron-icon>
+				<iron-icon icon="sonnet:columns"></iron-icon>
+				<iron-icon icon="sonnet:loader"></iron-icon>
+				<iron-icon icon="sonnet:bag"></iron-icon>
+				<iron-icon icon="sonnet:ban"></iron-icon>
+				<iron-icon icon="sonnet:flag"></iron-icon>
+				<iron-icon icon="sonnet:trash"></iron-icon>
+				<iron-icon icon="sonnet:expand"></iron-icon>
+				<iron-icon icon="sonnet:contract"></iron-icon>
+				<iron-icon icon="sonnet:maximize"></iron-icon>
+				<iron-icon icon="sonnet:minimize"></iron-icon>
+				<iron-icon icon="sonnet:plus"></iron-icon>
+				<iron-icon icon="sonnet:minus"></iron-icon>
+				<iron-icon icon="sonnet:check"></iron-icon>
+				<iron-icon icon="sonnet:cross"></iron-icon>
+				<iron-icon icon="sonnet:move"></iron-icon>
+				<iron-icon icon="sonnet:delete"></iron-icon>
+				<iron-icon icon="sonnet:menu"></iron-icon>
+				<iron-icon icon="sonnet:archive"></iron-icon>
+				<iron-icon icon="sonnet:inbox"></iron-icon>
+				<iron-icon icon="sonnet:outbox"></iron-icon>
+				<iron-icon icon="sonnet:file"></iron-icon>
+				<iron-icon icon="sonnet:file-add"></iron-icon>
+				<iron-icon icon="sonnet:file-subtract"></iron-icon>
+				<iron-icon icon="sonnet:help"></iron-icon>
+				<iron-icon icon="sonnet:open"></iron-icon>
+				<iron-icon icon="sonnet:ellipsis"></iron-icon>
+			</div> -->
+			
+			
+		</div>
+		
+	</div>
+</template>
+
+<script>
+'use strict';
+
+class KitchenSink extends SonnetAbstractTabPage {
+	static get is () {
+		return 'kitchen-sink';
+	}
+	
+	static get properties () {
+		return {
+			nestedString: {
+				type: String
+			},
+			nestedRegions: {
+				type: Array
+			},
+			flatString: {
+				type: String
+			},
+			flatRegions: {
+				type: Array
+			},
+			cropConfig: {
+				type: Object,
+				value: {
+					x: 500,
+					y: 500
+				}
+			}
+		};
+	}
+	
+	constructor () {
+		super();
+	}
+	
+	ready () {
+		super.ready();
+		
+		// this.$['camera-upload'].addEventListener('sonnet-image-upload', (event) => {
+		// 	console.log(event);
+		// });
+		
+		// this.qr = this.$.qr;
+		// this.$['qr-input'].addEventListener('change', () => {
+		// 	console.log("qr-input: firing change handler");
+		// 	this.qr.setQrCode(this.$['qr-input'].value);
+		// });
+	}
+	
+	_onFocus (e) {
+		
+	}
+	
+	closePage () {
+		this.loadPage('sonnet-login-page');
+	}
+	
+	generateJwt () {
+		this.loadService('sonnet-session-service')
+		.then((sessionService) => {
+			console.log('generating session token')
+			console.log(sessionService.generateSessionToken('abcdefg'));
+		})
+	}
+	
+	authorizeJwt () {
+		this.loadService('sonnet-session-service')
+		.then((sessionService) => {
+			console.log('validating session token')
+			return sessionService.authorizeSessionToken();
+		})
+		.then(authorized => {
+			if (authorized) {
+				console.log('authorized')
+			}
+			else console.log('not authorized')
+		})
+		.catch(err => {
+			console.error(err)
+		})
+	}
+}
+
+window.customElements.define(KitchenSink.is, KitchenSink);
+</script>
+</dom-module>

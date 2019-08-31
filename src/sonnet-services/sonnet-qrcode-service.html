@@ -1,0 +1,57 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<link rel="import" href="../../bower_components/iron-ajax/iron-request.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+
+<script src="../external-libs/jsqrcode-1.0.4/dist/index.js" type="text/javascript"></script>
+
+
+<dom-module id="sonnet-qrcode-service">
+	<template>
+	</template>
+	<script>
+		'use strict';
+		
+		class SonnetQrCodeService extends SonnetAbstractService {
+
+			static get is () {
+				return 'sonnet-qrcode-service';
+			}
+
+			static get properties () {
+				return {};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+			}
+			
+            decodeB64 (dataUrl) {
+                return new Promise((resolve, reject) => {
+                    var decoder = new QrCode();
+                    decoder.callback = (err, value) => {
+                        if (value) {
+							console.log('qrcodeService.decodeB64: value:');
+							console.log(value);
+                            resolve(value.result);
+                        }
+                        else {
+							let typeError = 'Failed to decode QR code. Please try again.';
+							console.log(typeError);
+                            reject(new TypeError(typeError));
+                        }
+                    };
+                    
+                    decoder.decode(dataUrl);
+                });
+            }
+		}
+
+		window.customElements.define(SonnetQrCodeService.is, SonnetQrCodeService);
+	</script>
+</dom-module>

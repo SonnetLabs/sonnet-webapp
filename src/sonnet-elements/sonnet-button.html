@@ -1,0 +1,122 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html">-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html">-->
+<link rel="import" href="./sonnet-styles.html">
+
+<!--
+`sonnet-button`
+Styled buttons
+
+@demo demo/index.html
+-->
+
+<dom-module id="sonnet-button">
+	<template>
+		<style include="sonnet-styles">
+			:host {
+				display: block;
+				-webkit-box-sizing: border-box;
+                box-sizing: border-box;
+			}
+
+			button {
+				border: var(--sonnet-button-border, 0);
+				border-radius: 0;
+				line-height: 1.25;
+				text-align: center;
+				white-space: nowrap;
+				vertical-align: middle;
+				-webkit-user-select: none;
+				   -moz-user-select: none;
+					-ms-user-select: none;
+						user-select: none;
+				padding: var(--sonnet-button-padding, 0.5rem 1rem);
+				font-size: 1rem;
+				-webkit-transition: all 0.2s ease-in-out;
+				-o-transition: all 0.2s ease-in-out;
+				transition: all 0.2s ease-in-out;
+				color: var(--sonnet-button-fg, #2c3e50);
+				background-color: var(--sonnet-button-bg, #ecf0f1);
+				width: 100%;
+			}
+
+			button:focus {
+				outline: 0;
+			}
+
+			button[disabled] {
+				cursor: not-allowed;
+			}
+
+			.large {
+				padding: 0.75rem 1.5rem;
+				font-size: 1.25rem;
+			}
+
+			.small {
+				padding: 0.25rem 0.5rem;
+				font-size: 0.875rem;
+			}
+
+			.block {
+				display: block;
+				width: 100%
+			}
+		</style>
+		<button class$="[[_computeClass(size, block)]]" disabled="[[disabled]]">
+			<slot></slot>
+		</button>
+	</template>
+
+	<script>
+		'use strict';
+		
+		class SonnetButton extends Polymer.Element {
+			static get is () {
+				return 'sonnet-button';
+			}
+			
+			static get properties () {
+				return {
+					size: {
+						type: String,
+						value: 'medium'
+					},
+					disabled: {
+						type: Boolean,
+						value: false,
+						reflectToAttribute: true
+					},
+					block: {
+						type: Boolean,
+						value: false
+					},
+					foreground: {
+						type: String,
+						value: '#000'
+					},
+					background: {
+						type: String,
+						value: 'transparent'
+					}
+				};
+			}
+
+			_computeClass (size, block) {
+				var classString = '';
+
+				if (size) {
+					classString += size;
+				}
+
+				if (block) {
+					classString += ' block';
+				}
+
+				return classString;
+			}
+		}
+
+		window.customElements.define(SonnetButton.is, SonnetButton);
+	</script>
+</dom-module>

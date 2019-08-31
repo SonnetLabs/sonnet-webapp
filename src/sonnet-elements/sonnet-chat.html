@@ -1,0 +1,655 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../sonnet-app/sonnet-app.html" />
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-input.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+<link rel="import" href="../sonnet-elements/sonnet-image-upload.html" />
+<link rel="import" href="../sonnet-elements/sonnet-camera-upload.html" />
+
+<dom-module id="sonnet-chat">
+    <template>
+        <style include="iron-flex iron-flex-alignment sonnet-styles">
+            :host {
+                display: block;
+                height: 100%;
+                width: 100%;
+            }
+
+            sonnet-button {
+                padding: 13px;
+                --sonnet-button-padding: 0;
+            }
+
+            sonnet-button[disabled] {
+                opacity: 0.5;
+            }
+
+            .title {
+                font-size: 1.25em;
+                font-weight: bold;
+            }
+
+            #input-bar {
+                z-index: 1000;
+                /* position: fixed; */
+                /* bottom: 0; */
+                /*height: 50px;*/
+                height: auto;
+                width: 100%;
+                background-color: #ecf0f1;
+            }
+
+            /*#input-bar.expanded {
+                height: 240px;
+            }*/
+
+            #container {
+                height: 100%;
+                width: 100%;
+            }
+
+            /* #container.expanded {
+                padding-bottom: 135px;
+            } */
+
+            #message-container {
+                height: 100%;
+                width: 100%;
+                padding: 0 10px;
+                overflow: auto;
+            }
+
+            .message {
+                margin-bottom: 10px;
+                min-height: 38px;
+            }
+            
+            .first-message {
+                margin-top: 10px;
+            }
+
+            .message-icon {
+                height: 38px;
+                width: 38px;
+            }
+
+            .message-payload {
+                padding: 10px;
+                background-color: #ecf0f1;
+                max-width: 75%;
+                position: relative;
+            }
+
+            .in .message-payload {
+                margin-left: 15px;
+            }
+
+                .message-payload::before {
+                    display: block;
+                    position: absolute;
+                    content: '';
+                    width: 0; 
+                    height: 0; 
+                }
+
+                .in .message-payload::before {
+                    border-top: 9px solid transparent;
+                    border-bottom: 9px solid transparent; 
+                    border-right: 9px solid #ecf0f1; 
+                    left: -7px;
+                }
+
+
+            .out {
+                @apply --layout-end-justified;
+            }
+
+            .out .message-icon {
+                display: none;
+            }
+            .out .message-payload {
+                color: #fff;
+                background-color: #2980b9;
+                margin-right: 7px;
+            }
+                .out .message-payload::before {
+                    border-top: 9px solid transparent;
+                    border-bottom: 9px solid transparent;
+                    border-left: 9px solid #2980b9;
+                    right: -7px;
+                }
+
+            .location .message-payload {
+                background-color: #27ae60;
+            }
+                .in.location .message-payload::before {
+                    border-right: 9px solid #27ae60; 
+                }
+                .out.location .message-payload::before {
+                    border-left: 9px solid #27ae60;
+                }
+
+            span[type=location] > sonnet-button {
+                --sonnet-button-fg: #fff;
+                --sonnet-button-bg: transparent;
+            }
+
+            .extended-input {
+                width: 75px;
+                height: 75px;
+                --sonnet-button-padding: 16px 0;
+                --sonnet-button-fg: #2c3e50;
+                --sonnet-button-bg: #fff;
+                background: #fff;
+                color: #2c3e50;
+                padding: 0;
+                margin: 5px;
+            }
+
+            .extended-input[disabled] {
+                opacity: 0.50;
+            }
+
+            .extended-input.placeholder {
+                opacity: 0;
+            }
+
+            .extended-input-label {
+                font-size: 0.85rem;
+                margin-top: 4px;
+            }
+
+            #input-2 {
+                padding: 0 10px;
+                @apply(--layout-justified);
+                margin-top: -5px;
+                padding-bottom: 5px;
+            }
+
+            .hidden {
+                display: none!important;
+            }
+
+            .outer-input-container {
+                height: 100%;
+            }
+
+            .inner-input-container {
+                height: 100%;
+                width: 100%;
+            }
+
+            span[type=text].image, span[type=text].location,
+            span[type=image].text, span[type=image].location,
+            span[type=location].image, span[type=location].text {
+                display: none;
+            }
+
+            .message-payload img {
+                max-width: 100%;
+            }
+            
+            #load-prev-msgs {
+                --sonnet-button-bg: rgba(0,0,0,0);
+                --sonnet-button-padding: 0;
+                padding: 13px 0 0 0;
+            }
+            
+            .visibility-none {
+                visibility: none;
+            }
+            
+        </style>
+        <div id="container" class="vertical layout">
+            <div id="message-container" class="flex">
+                <div>
+                    <!-- BUG: tap events are not emitted on this element,
+                    but click events are emitted instead -->
+                    <!-- other on-tap elements in the app elsewhere emit both -->
+                    <!-- all the on-tap elements in this element are affected -->
+                    <sonnet-button 
+                    id="load-prev-msgs"
+                    on-tap="_loadPreviousMsgs"
+                    on-click="_loadPreviousMsgs"
+                    class$="[[_computeLoadPrev(currentChatLog)]]">
+                        Load more...
+                    </sonnet-button>
+                </div>
+                <dom-repeat items="[[currentChatLog]]" initial-count="20" as="message">
+                    <template>
+                        <div class$="[[_computeMessageClass(message.source, message.type, index)]]">
+                            <img class="message-icon" src$="[[_computeIconUrl(message.source, identiconService, contactService)]]" />
+                            <div class="message-payload">
+                                <span type="text" class$="[[_computePayloadClass(message.type)]]">[[message.message]]</span>
+                                <span type="image" class$="[[_computePayloadClass(message.type)]]"><img src$="[[_computeImageSrc(message.message)]]" /></span>
+                                <span type="location" class$="[[_computePayloadClass(message.type)]]">
+                                    <sonnet-button on-tap="_onLocationTap" on-click="_onLocationTap">
+                                        <iron-icon icon="sonnet:location-2"></iron-icon>&nbsp;Location
+                                    </sonnet-button>
+                                </span>
+                            </div>
+                        </div>
+                    </template>
+                </dom-repeat>
+            </div>
+            
+            <div id="input-bar">
+                <div id="input-1" class="layout horizontal self-center center">
+                    <sonnet-button disabled>
+                        <iron-icon icon="sonnet:microphone"></iron-icon>
+                    </sonnet-button>
+                    <sonnet-input id="text-input" type="text" value="{{messageInput::input}}" on-focus="_onInputFocus" on-keydown="_onKeyDown"></sonnet-input>
+                    <sonnet-button on-tap="_toggleExpandInputBar" on-click="_toggleExpandInputBar">
+                        <iron-icon icon="sonnet:plus"></iron-icon>
+                    </sonnet-button>
+                </div>
+                
+                <div id="input-2" class="layout horizontal center wrap hidden">
+
+                    <!-- hidden on browser as desktops will go to file explorer, mobile will prompt for camera or gallery -->
+                    <sonnet-image-upload hidden="[[bBrowserPlatform]]" id="image-upload" class="extended-input" crop crop-config="[[cropConfig]]" quality="10">
+                        <div class="inner-input-container layout vertical center center-justified">
+                            <iron-icon icon="sonnet:image" class="extended-input-icon"></iron-icon>
+                            <div class="extended-input-label">Photos</div>
+                        </div>
+                    </sonnet-image-upload>
+                
+                    <sonnet-camera-upload id="camera-upload" class="extended-input" crop crop-config="[[cropConfig]]" quality="10">
+                        <div class="inner-input-container layout vertical center center-justified">
+                            <iron-icon icon="sonnet:camera" class="extended-input-icon"></iron-icon>
+                            <div class="extended-input-label">[[cameraInputText]]</div>
+                        </div>
+                    </sonnet-camera-upload>
+                    
+                    <sonnet-button id="send-location" class="extended-input layout vertical center" on-click="_onLocation">
+                        <iron-icon icon="sonnet:location" class="extended-input-icon"></iron-icon>
+                        <div class="extended-input-label">Location</div>
+                    </sonnet-button>
+                    
+                    <!-- <sonnet-button id="send-poi" class="extended-input layout vertical center" disabled>
+                        <iron-icon icon="sonnet:flag" class="extended-input-icon"></iron-icon>
+                        <div class="extended-input-label">
+                            POI
+                        </div>
+                    </sonnet-button>				
+                    
+                    <sonnet-button id="send-draw" class="extended-input layout vertical center" disabled>
+                        <iron-icon icon="sonnet:marquee-plus" class="extended-input-icon"></iron-icon>
+                        <div class="extended-input-label">
+                            Draw
+                        </div>
+                    </sonnet-button> -->
+                </div>
+            </div>
+        </div>
+
+        
+        
+    </template>
+    
+    <script>
+		'use strict';
+
+		class SonnetChat extends Polymer.Element {
+			static get is () {
+				return 'sonnet-chat';
+			}
+
+			static get properties () {
+				return {
+					prevPage: String,
+                    bBrowserPlatform: {
+                        type: Boolean,
+                        value: false
+                    },
+                    cameraInputText: {
+                        type: String,
+                        value: 'Camera'
+                    },
+					contact: {
+						type: Object
+					},
+                    device: {
+                        type: Object,
+                        value: null
+                    },
+					// userId: {
+					// 	type: String
+					// },
+					currentUser: {
+						type: Object,
+						value: {}
+					},
+					currentChat: {
+						type: Object,
+						value: {},
+						notify: true
+					},
+					currentChatLog: {
+						type: Array,
+						value: []
+					},
+					currentChatMembers: {
+						type: Array,
+						value: []
+					},
+					identiconService: {
+						type: Object,
+						value: null
+					},
+					contactService: {
+						type: Object,
+						value: null
+					},
+					bInputBarExpanded: {
+						type: Boolean,
+						value: false
+					},
+					cropConfig : {
+						type: Object,
+						value: function () {
+							return {
+								x: 512,
+								y: 512
+							}
+						}
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+                
+                document.addEventListener('deviceready', () => {
+                    console.log('sonnet-chat: device is ready')
+                    this.set('device', device);
+                    if (this.device.platform === 'browser') {
+                        this.set('bBrowserPlatform', true);
+                        this.set('cameraInputText', 'Image');
+                    } else {
+                        this.set('cameraInputText', 'Camera')
+                    }
+                });
+                
+                this.loadService = SonnetApp.instance.loadService.bind(SonnetApp.instance);
+				this.loadPage = SonnetApp.instance.loadPage.bind(SonnetApp.instance);
+
+				this.loadService([
+					'sonnet-identicon-service',
+					'sonnet-contact-service'
+				]).then((services) => {
+					this.set('identiconService', services[0]);
+					this.set('contactService', services[1]);
+				});
+				
+				this.$['camera-upload'].addEventListener('sonnet-image-upload', this._onPhotoUpload.bind(this));
+				this.$['image-upload'].addEventListener('sonnet-image-upload', this._onPhotoUpload.bind(this));
+				
+				this.loadService('sonnet-message-service')
+				.then((messageService) => {
+					messageService.addEventListener('new-message', this._newMessageHandler.bind(this))
+				})
+			}
+
+			_computeIconUrl (source, identiconService, contactService) {
+				if (identiconService && contactService) {
+					return 'data:image/png;base64,' + identiconService.generateIconUrl(contactService.contactDir[source].icon);
+				}
+			}
+
+			_computeMessageClass (source, type, index) {
+				var classString = 'message layout horizontal';
+
+				classString += (' ' + type);
+
+				if (source === this.currentUser.userId) {
+					classString += ' out';
+				} else {
+					classString += ' in';
+				}
+				
+				if (index === 0) {
+					classString += ' first-message';
+				}
+
+				return classString;
+			}
+
+			_computePayloadClass (payloadType) {
+				return payloadType;
+			}
+
+			_computeImageSrc (src) {
+				var dataSrc = '',
+					dataArray;
+
+				if (typeof src === 'string') {
+					dataArray = src.split('/');
+				} else {
+					dataArray = [''];
+				}
+
+				if (dataArray[0] === 'data:image') {
+					dataSrc = src;
+				}
+
+				return dataSrc;
+			}
+
+			_getMessageIcon (members, senderId) {
+				// console.log(members[senderId]);
+				return members[senderId].iconUrl;
+			}
+
+			_onLocationTap (e) {
+				var locationInfo = e.model.message.message;
+                
+                console.log(locationInfo);
+                
+                let targetRegion;
+                let mapsPage;
+                
+                // check if the point is in any of the installed maps
+                // if so, load the map that contains it
+                // if not, reject
+                this.loadService('sonnet-map-service')
+                .then(mapService => {
+                    return mapService.pointInInstalledMaps(locationInfo);
+                }).then(region => {
+                    targetRegion = region;
+                    return this.loadPage('sonnet-maps-page');
+                }).then(page => {
+                    mapsPage = page;
+                    
+                    return mapsPage.render(targetRegion);
+                }).then(() => {
+                    mapsPage.addPinAndZoom(locationInfo.longitude, locationInfo.latitude)
+                }).catch(err => {
+                    console.log(err);
+                    alert(err);
+                });
+                
+                // TODO: this should be encapsulated in the loading page function, or something in the maps page
+			}
+
+            // TODO: delete this, keep scrolltobottom in chat page
+            // TODO: expose scrolltobottom so chats page may use it in desktop mode
+			_onFocus (e) {
+				// the data initialization and redrawing are called in the chats page before this page loads
+				// otherwise there will be a flash of the previous chat's msgs
+				this.set('prevPage', e.detail.prevPage);
+				this.scrollToBottom();
+			}
+
+			_onBlur (e) {
+				this.set('contact', null);
+			}
+
+			_onKeyDown (e) {
+				if (e.which === 13 && this.messageInput) {
+					this._sendMessage(this.messageInput);
+					this.set('messageInput', '');
+				}
+			}
+
+			_onInputFocus (e) {
+				if (this.bInputBarExpanded) {
+					this.$['input-2'].classList.add('hidden');
+					this.bInputBarExpanded = false;
+				}
+			}
+			
+			_onPhotoUpload (e) {
+				this.$['text-input'].set('disabled', true);
+				this.set('messageInput', 'Sending Image... ');
+				this.$['camera-upload'].set('disabled', true);
+				this.$['image-upload'].set('disabled', true);
+				this.$['send-location'].set('disabled', true);
+
+				var percentageCompletion = 0.0;
+				var updateProgressInterval = setInterval(() => {
+					percentageCompletion += (240 / e.detail.length);
+
+					if (percentageCompletion > 1) {
+						percentageCompletion = 1;
+						this.set('messageInput', '');
+						this.$['text-input'].set('disabled', false);
+						this.$['camera-upload'].set('disabled', false);
+						this.$['image-upload'].set('disabled', false);
+						this.$['send-location'].set('disabled', false);
+						clearInterval(updateProgressInterval);
+					} else {
+						this.set('messageInput', 'Sending Image... ' + (percentageCompletion * 100).toFixed(2) + '%');
+					}
+
+				}, 1000);
+
+				this.loadService('sonnet-message-service')
+				.then((messageService) => {
+					messageService.sendMessage(this.currentChat.id, [
+						'image',
+						e.detail
+					]);
+				});
+			}
+
+			_sendMessage (message) {
+				this.loadService('sonnet-message-service')
+				.then((messageService) => {
+					messageService.sendMessage(this.currentChat.id, [
+						'text',
+						message
+					]);
+				});
+			}
+
+			_onLocation (e) {
+                console.log('_onLocation');
+				if (!this.$['send-location'].disabled) {
+                    console.log('send-location enabled')
+					if (navigator.geolocation) {
+                        console.log('we have navigator.geolocation')
+                        
+						navigator.geolocation.getCurrentPosition((position) => {
+                            console.log('got current position')
+                            console.log(position)
+                            
+							this.loadService('sonnet-message-service')
+							.then((messageService) => {
+								messageService.sendMessage(this.currentChat.id, [
+								    'location',
+									'' + position.coords.latitude,
+									'' + position.coords.longitude,
+									'' + position.coords.altitude,
+                                    '' + position.coords.accuracy
+								]);
+							});
+						}, (err) => {
+                            console.log(err);
+							alert('Unable to receive geolocation data.');
+						});
+					} else {
+                        console.log('we do not have navigator.geolocation');
+						alert('HTML5 Geolocation not supported.');
+					}
+				} else {
+                    console.log('this.send-location is disabled')
+                }
+			}
+			
+			scrollToBottom () {
+				// TODO: this is a race condition to see whether the currentChatLog is updated before the scroll fires
+				// change this so that it fires or is called after polymer redraws the canvas
+				setTimeout(() => {
+					this.$['message-container'].scrollTop = this.$['message-container'].scrollHeight;
+					// this.$['message-container'].classList.remove('visibility-none');
+				}, 80);
+			}
+
+			thresholdScrollToBottom () {
+				// check that the message event that fired corresponds to this current chat
+				var messageContainer = this.$['message-container'];
+				
+				if ((messageContainer.scrollHeight - messageContainer.offsetHeight) - messageContainer.scrollTop < 100) {
+					this.scrollToBottom();
+				}
+			}
+			
+			_toggleExpandInputBar () {
+				if (!this.bInputBarExpanded) {
+					this.$['input-2'].classList.remove('hidden');
+					this.$['container'].classList.add('expanded');
+                    this.thresholdScrollToBottom();
+				}
+				else {
+					this.$['input-2'].classList.add('hidden');
+					this.$['container'].classList.remove('expanded');
+				}
+				this.bInputBarExpanded = !this.bInputBarExpanded;
+			}
+			
+			_loadPreviousMsgs () {            
+				this.loadService('sonnet-message-service')
+				.then((messageService) => {
+					messageService.loadEarlierMsgsChunk(messageService.chatMsgChunkSize);
+				});
+			}
+			
+			_computeLoadPrev (chatLog) {
+				// TODO: check that the msgId matches the earliest in the message db, not just 0 (in case of deleted/corrupted msg logs)
+
+				if (chatLog.length > 0 && chatLog[0].msgId !== 0) {
+					return "";
+				}
+				else {
+					return "hidden";
+				}
+			}
+			
+			_newMessageHandler (e) {
+				if (e.detail.chatId === this.currentChat.id) {
+					if (e.detail.source === this.currentUser.userId) {
+						this.scrollToBottom();
+					}
+					else {
+						this.thresholdScrollToBottom();
+					}
+				}
+			}
+		}
+
+		window.customElements.define(SonnetChat.is, SonnetChat);
+	</script>
+</dom-module>

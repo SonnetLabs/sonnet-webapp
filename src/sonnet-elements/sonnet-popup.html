@@ -1,0 +1,87 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<link rel="import" href="../../bower_components/polymer/lib/mixins/gesture-event-listeners.html">
+
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="./sonnet-button.html" />
+<link rel="import" href="./sonnet-icons.html" />
+<link rel="import" href="./sonnet-styles.html">
+
+<dom-module id="sonnet-popup">
+    <template>
+        <style include="sonnet-styles">
+        :host {
+            display: block;
+            width: 100%;
+            height: 100%;
+
+        }
+        
+        #popup {
+            position: fixed;
+            z-index: 1000;
+            padding: 10px;
+            
+            top: 50%;
+            left: 50%;
+            margin-top: -100px;
+            margin-left: -100px;
+            height: 200px;
+            width: 200px;
+            
+            background-color: #ecf0f1;
+
+            border-style: solid;
+            border-width: 2px;
+            border-color: red;
+        }
+        </style>
+        
+        <div id="popup">
+            <div id="content">
+                <div>
+                    <slot>
+                        
+                    </slot>
+                </div>
+                <div>
+                    hello
+                </div>
+            </div>
+            
+            <!-- TODO: add general close button/element -->
+            
+        </div>
+    </template>
+	<script>
+		'use strict';
+
+		class SonnetPopup extends Polymer.Element {
+			static get is () {
+				return 'sonnet-popup';
+			}
+
+			static get properties () {
+				return {
+				};
+			}
+
+			constructor () {
+				super();
+
+				
+			}
+
+			ready () {
+				super.ready();
+			}
+
+			_onFocus () {}
+
+			_onBlur () {}
+		}
+
+		window.customElements.define(SonnetPopup.is, SonnetPopup);
+	</script>
+</dom-module>

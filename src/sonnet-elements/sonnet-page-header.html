@@ -1,0 +1,103 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+<link rel="import" href="./sonnet-styles.html">
+<link rel="import" href="./sonnet-disconnect-banner.html" />
+
+
+<dom-module id="sonnet-page-header">
+	<template>
+		<style include="sonnet-styles iron-flex iron-flex-alignment">
+			:host {
+				display: block;
+				width: 100%;
+				height: auto;
+				/* position: fixed;
+				top: 0; */
+				z-index: 1000;
+			}
+			
+			header {
+				height: auto;
+				width: 100%;
+				background-color: #ecf0f1;
+				color: #2c3e50;
+			}
+
+			.header {
+				height: 50px;
+				width: 100%;
+			}
+			
+			.ios-status-bar-offset {
+				height: 10px;
+				width: 100%;
+			}
+			
+			sonnet-disconnect-banner {
+                position: relative;
+                top: 0px;
+                left: 0px;
+            }
+		</style>
+		
+		<header class="layout vertical center">
+			<div hidden="[[!isIos]]" class="ios-status-bar-offset"></div>
+			
+			<div class="layout horizontal center header">
+				<div>
+					<slot name="left">
+						<sonnet-button disabled>
+							<iron-icon></iron-icon>
+						</sonnet-button>
+					</slot>
+				</div>
+				<div class="flex vertical layout center">
+					<slot></slot>
+				</div>
+				<div>
+					<slot name="right">
+						<sonnet-button disabled>
+							<iron-icon></iron-icon>
+						</sonnet-button>
+					</slot>
+				</div>
+			</header>
+		</div>
+		
+		<sonnet-disconnect-banner></sonnet-disconnect-banner>
+	</template>
+
+	<script>
+		'use strict';
+		
+		class SonnetPageHeader extends Polymer.Element {
+			static get is () {
+                return 'sonnet-page-header';
+            }
+
+			static get properties () {
+				return {
+					isIos: {
+						type: Boolean,
+						value: false
+					}
+				};
+			}
+			
+			ready () {
+				super.ready();
+				
+				document.addEventListener('deviceready', () => {
+					this.set('device', device);
+
+                    this.set('isIos', this.device.platform.toLowerCase() === 'ios');
+				});
+			}
+		}
+
+		window.customElements.define(SonnetPageHeader.is, SonnetPageHeader);
+	</script>
+</dom-module>

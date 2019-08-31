@@ -1,0 +1,471 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+<link rel="import" href="../../bower_components/iron-pages/iron-pages.html" />
+<link rel="import" href="../../bower_components/iron-resizable-behavior/iron-resizable-behavior.html" />
+
+<link rel="import" href="../sonnet-elements/sonnet-tab-bar.html" />
+
+<link rel="import" href="../sonnet-pages/sonnet-chat-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-chats-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-contact-details-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-add-contact-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-contacts-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-login-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-maps-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-map-region-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-register-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-settings-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-sos-page.html" />
+<link rel="import" href="../sonnet-pages/sonnet-testing-page.html" />
+<link rel="import" href="../sonnet-pages/kitchen-sink.html" />
+
+<link rel="import" href="../sonnet-services/sonnet-contact-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-crypto-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-identicon-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-message-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-map-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-notification-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-rest-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-session-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-storage-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-socket-service.html" />
+<link rel="import" href="../sonnet-services/sonnet-qrcode-service.html" />
+
+
+<dom-module id="sonnet-app">
+	<template>
+		<style include="iron-flex iron-flex-alignment iron-flex-reverse">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+			
+			#container {
+				height: 100%;
+				width: 100%;
+			}
+			
+			iron-pages.desktop {
+				height: 100%;
+				width: 100%;
+			}
+			
+			iron-pages.mobile {
+				width: 100%;
+			}
+			
+			horizontal
+
+			#services {
+				display: none;
+			}
+		</style>
+
+		<div id="container" class$="{{_computeLayout(desktop)}}">
+
+			<iron-pages attr-for-selected="page-id" selected="{{activePage}}" id="page-container" class$="{{_computeIronPagesClass(desktop)}}">
+				<sonnet-add-contact-page
+					current-user="{{currentUser}}">
+				</sonnet-add-contact-page>
+				<!-- done -->
+				
+				<!-- <sonnet-chat-page
+					current-chat="{{currentChat}}"
+					current-chat-log="{{currentChatLog}}"
+					user-id="{{userId}}"> -->
+				<sonnet-chat-page
+					current-chat="{{currentChat}}"
+					current-chat-log="{{currentChatLog}}"
+					current-user="{{currentUser}}"
+					desktop="{{desktop}}"
+					indicators="{{indicators}}"
+					last-chat="{{lastChat}}">
+				</sonnet-chat-page>
+				<!-- done -->
+
+				<sonnet-chats-page
+					chats="{{chats}}"
+					current-chat="{{currentChat}}"
+					current-chat-log="{{currentChatLog}}"
+					current-user="{{currentUser}}"
+					desktop="{{desktop}}"
+					last-chat="{{lastChat}}">
+				</sonnet-chats-page>
+				
+				<sonnet-contact-details-page>
+				</sonnet-contact-details-page>
+				
+				<!-- <sonnet-contacts-page 
+					contacts="{{contacts}}"
+					user-id="{{userId}}"> -->
+				<sonnet-contacts-page 
+					contacts="{{contacts}}"
+					current-user="{{currentUser}}">
+				</sonnet-contacts-page>
+				<!-- done -->
+
+				<sonnet-login-page>
+				</sonnet-login-page>
+
+				<sonnet-maps-page
+					map-status="{{mapStatus}}"
+					sd-mounted="{{sdMounted}}">
+				</sonnet-maps-page>
+				
+				<sonnet-map-region-page
+					map-status="{{mapStatus}}"
+					map-regions="{{mapRegions}}">
+				</sonnet-map-region-page>
+
+				<!-- this does not exist anymore, remove on next commit -->
+				<sonnet-qrcode-page>
+				</sonnet-qrcode-page>
+				
+				<sonnet-register-page>
+				</sonnet-register-page>
+
+				<sonnet-settings-page
+					jwt="{{jwt}}"
+					map-status="{{mapStatus}}"
+					map-regions="{{mapRegions}}"
+					sd-mounted="{{sdMounted}}"
+					token-is-valid="{{settingsTokenIsValid}}">
+				</sonnet-settings-page>
+				
+				<!-- <sonnet-sos-page
+					display-name="{{displayName}}"> -->
+				<sonnet-sos-page
+					current-user="{{currentUser}}">
+				</sonnet-sos-page>
+				<!-- done -->
+
+				<sonnet-testing-page>
+				</sonnet-testing-page>
+				
+				<kitchen-sink
+					map-status="{{mapStatus}}"
+					map-regions="{{mapRegions}}"></kitchen-sink>
+			</iron-pages>
+
+			<sonnet-tab-bar 
+				active-page="{{activePage}}" 
+				desktop="{{desktop}}"
+				indicators="{{indicators}}">
+			</sonnet-tab-bar>
+
+		</div>
+		
+		<div id="service-container">
+			<sonnet-contact-service
+				contacts="{{contacts}}"
+				current-user="{{currentUser}}">
+			</sonnet-contact-service>
+			<!-- TODO: will need some moreupdating -->
+
+			<sonnet-crypto-service>
+			</sonnet-crypto-service>
+
+			<sonnet-identicon-service>
+			</sonnet-identicon-service>
+			
+			<sonnet-map-service
+				map-status="{{mapStatus}}"
+				map-regions="{{mapRegions}}"
+				sd-mounted="{{sdMounted}}">
+			</sonnet-map-service>
+			
+			<!-- <sonnet-message-service
+				user-id="{{userId}}"
+				chats="{{chats}}"
+				current-chat="{{currentChat}}"
+				current-chat-log="{{currentChatLog}}"> -->
+			<sonnet-message-service
+				chats="{{chats}}"
+				current-user="{{currentUser}}"
+				current-chat="{{currentChat}}"
+				current-chat-log="{{currentChatLog}}"
+				last-chat="{{lastChat}}">
+			</sonnet-message-service>
+			<!-- done -->
+			
+			<sonnet-notification-service
+				active-page="{{activePage}}"
+				desktop="{{desktop}}"
+				indicators="{{indicators}}">
+			</sonnet-notification-service>
+			
+			<sonnet-rest-service
+				jwt="{{jwt}}"
+				settings-token-is-valid="{{settingsTokenIsValid}}">
+			</sonnet-rest-service>
+			
+			<!-- <sonnet-session-service
+				display-name="{{displayName}}"
+				username="{{username}}"
+				user-id="{{userId}}">	 -->
+			<sonnet-session-service
+				id="sonnet-session-service"
+				current-user="{{currentUser}}">
+			</sonnet-session-service>
+			<!-- done -->
+			
+			<!-- <sonnet-storage-service
+				username="{{username}}"> -->
+			<sonnet-storage-service
+				current-user="{{currentUser}}">
+			</sonnet-storage-service>
+			<!-- done -->
+
+			<sonnet-socket-service>
+			</sonnet-socket-service>
+			
+			<sonnet-qrcode-service>
+			</sonnet-qrcode-service>
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetApp extends Polymer.mixinBehaviors (Polymer.IronResizableBehavior, Polymer.Element) {
+			static get srcPath () {
+				return '/src';
+			}
+
+			static get is () {
+				return 'sonnet-app';
+			}
+
+			static get properties () {
+				return {
+					activePage: {
+						type: String,
+						notify: true
+					},
+					desktop: {
+						type: Boolean,
+						value: false,
+						notify: true
+					},
+					_services: {
+						type: Object,
+						value: {}
+					},
+					_pages: {
+						type: Object,
+						value: {}
+					},
+					indicators: {
+						type: Object,
+						notify: true,
+						value: {
+							msg: false
+						}
+					}
+				};
+			}
+
+			constructor () {
+				super();
+
+				if (SonnetApp.instance) {
+					throw new TypeError('Cannot instantiate Sonnet App twice!');
+					return false;
+				}
+
+				SonnetApp.instance = this;
+
+				this.addEventListener('s-service-ready', this._onServiceReady);
+			}
+
+			ready () {
+				super.ready();
+				
+				this._checkIfDesktop();
+				
+				let storageService;
+				let sessionService;
+				let tokenInfo;
+				Promise.all([
+					this.loadService('sonnet-storage-service'),
+					this.loadService('sonnet-session-service')
+				])
+				.then(services => {
+					storageService = services[0];
+					sessionService = services[1];
+					return storageService.dbExists('session');
+				})
+				.then(exists => {
+					if (exists)	return sessionService.readSessionTokenInfo();
+					else {
+						console.log('session db doesn\'t exist. resuming regular login process')
+						this.loadPage('sonnet-login-page');
+						return Promise.reject();
+					}
+				})
+				.then(result => {
+					tokenInfo = result;
+					let isValid = sessionService.validateSessionToken(tokenInfo)
+					
+					if (isValid) {
+						let parsed = sessionService.parseSessionToken(tokenInfo.token);
+						
+						return sessionService.completeLoginProcess(parsed.usr)
+						.then(() => {
+							this.loadPage('sonnet-chats-page');
+							// this.loadPage('sonnet-contacts-page');
+							// this.loadPage('sonnet-maps-page');
+							// this.loadPage('sonnet-sos-page');
+							// this.loadPage('sonnet-settings-page');
+							// this.loadPage('kitchen-sink')
+							
+							// FIXME: there's a bug where if you go from mobile to desktop and back then to desktop again,
+							// it loads the chats page
+							
+							return;
+						})
+						.catch(err => {
+							return Promise.reject(err);
+						});
+					}
+					else {
+						console.log('Invalid token. Resuming regular sign-in process')
+						this.loadPage('sonnet-login-page');
+						return;
+					}
+				})
+				.catch(err => {
+					if (err) console.log(err);
+				})
+				// this.loadPage('sonnet-guest-page');
+				// this.loadPage('sonnet-login-page');
+				// this.loadPage('sonnet-chat-page');
+				// this.loadPage('sonnet-add-contact-page');
+				
+				// window.onresize((e) => {
+				// 	this._resizeHandler();
+				// })
+				console.log('App launched!');
+				
+				// this.set('indicators.msg', true);
+				// 
+				// setInterval(() => {
+				// 	this.set('indicators.msg', !this.indicators.msg);
+				// }, 2000)
+			}
+			
+			connectedCallback() {
+				super.connectedCallback();
+				this.addEventListener('iron-resize', this._resizeHandler.bind(this));
+			}
+
+			registerService (serviceId, promise) {
+				this._services[serviceId] = promise;
+			}
+
+			loadService (serviceIds) {
+				if (typeof serviceIds === 'string') {
+					serviceIds = [serviceIds];
+				}
+
+				var loadedServices = [];
+
+				serviceIds.forEach((serviceId) => {
+					if (this._services[serviceId]) {
+						loadedServices.push(this._services[serviceId]);
+					}
+				});
+
+				if (loadedServices.length === 0) {
+					throw new TypeError('Invalid serviceId.');
+				} else if (loadedServices.length === 1) {
+					return loadedServices[0];
+				} else {
+					return Promise.all(loadedServices);
+				}
+			}
+
+			registerPage (pageId, promise) {
+				this._pages[pageId] = promise;
+			}
+
+			loadPage (pageId, data) {
+				if (!this._pages[pageId]) {
+					throw new TypeError('Invalid pageId.');
+				}
+
+				data = data || {};
+
+				return new Promise((resolve, reject) => {
+					Promise.all([this._pages[this.activePage], this._pages[pageId]])
+					.then((pages) => {
+						var currentPage = pages[0],
+							nextPage = pages[1];
+
+						if (currentPage) {
+							currentPage.dispatchEvent(new CustomEvent('s-page-blur'), {});
+						}
+
+						nextPage.dispatchEvent(new CustomEvent('s-page-focus', {
+							detail: {
+								prevPage: this.activePage,
+								pageId: pageId,
+								data: data
+							}
+						}));
+
+						this.set('activePage', pageId);
+
+						resolve(nextPage);
+					});
+				});
+			}
+
+			_onServiceReady (e) {
+				console.log(e.detail);
+			}
+			
+			_resizeHandler (e) {
+				if (!this.desktop && window.innerWidth > 1000 && window.innerWidth > window.innerHeight) {
+					this.set('desktop', true);
+				}
+				else if (this.desktop && window.innerWidth < 1000 && window.innerWidth < window.innerHeight) {
+					this.set('desktop', false);
+				}
+			}
+			
+			_checkIfDesktop () {
+				if (window.innerWidth > 1000 && window.innerWidth > window.innerHeight) {
+					this.set('desktop', true);
+				}	
+			}
+			
+			_computeIronPagesClass (desktop) {
+				let classes = 'flex';
+				
+				if (desktop) classes += ' desktop';
+				else classes += ' mobile';
+				
+				return classes;
+			}
+			
+			_computeLayout (desktop) {
+				let classes = 'layout center';
+				
+				if (desktop) {
+					classes += ' horizontal-reverse';
+				} else {
+					classes += ' vertical'
+				}
+				
+				return classes;
+			}
+		}
+
+		window.customElements.define(SonnetApp.is, SonnetApp);
+	</script>
+</dom-module>

@@ -1,0 +1,204 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!-- <link rel="import" href="../polymer/lib/elements/dom-repeat.html" /> -->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-input.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+<dom-module id="sonnet-map-region-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+				--sonnet-button-bg: transparent;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			.separator {
+				width: 100%;
+				background: #ecf0f1;
+				padding: 10px;
+				color: #2c3e50;
+			}
+
+			#search {
+				padding: 10px;
+			}
+
+			sonnet-input {
+				--sonnet-input-bg: #ecf0f1;
+				--sonnet-input-fg: #2c3e50;
+			}
+			
+			.region-entry {
+				height: 50px;
+				padding-left: 10px;
+			}
+			
+			.region-entry:not(:last-child) {
+                border-bottom: 1px solid #aaaaaa;
+            }
+			
+			.subtext {
+				color: #888888;
+				font-size: 12px;
+			}
+		</style>
+
+		<div page="map-region" class="page-body vertical layout">
+			<sonnet-page-header>
+				<div class="title">Regions</div>
+				<div slot="left">
+                    <sonnet-button on-click="_onBack">
+    					<iron-icon icon="sonnet:arrow-left"></iron-icon>
+    				</sonnet-button>
+				</div>
+			</sonnet-page-header>
+
+			<div id="container" class="flex full-size">
+				<dom-repeat items="[[mapRegions]]" as="region">
+                <template>
+                    <dom-if 
+                    if="[[_computeVisible(region, mapStatus.*)]]" 
+                    restamp="true"
+                    class$="region-entry">
+                    <template>
+                        <div class="horizontal region-entry layout center" on-tap="_onRegionSelect" on-click="_onRegionSelect">
+                            <div class$="flex vertical center-justified layout">
+                                <div>
+                                    [[region.name]]
+                                </div>
+                                <div class="subtext">
+                                    [[_computeParentSubtext(region)]]
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    </dom-if>
+                </template>
+                </dom-repeat>
+                
+                <dom-if if="[[_computeNoMapsMsg(mapStatus.*)]]">
+                <template>
+                    <div class="flex full-size vertical layout center center-justified">
+						<div>
+							<div>
+	                            No maps found installed on device.
+	                        </div>
+	                        <div>
+	                             Install some in the Settings page.
+	                        </div>
+	                        <div>
+	                            (requires administrator password)
+	                        </div>
+						</div>
+                    </div>
+                </template>
+                </dom-if>
+			</div>
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetMapRegionPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-map-region-page';
+			}
+
+			static get properties () {
+				return {
+					mapRegions: {
+						type: Array
+					},
+					mapStatus: {
+						type: Object
+					}
+				};
+			}
+
+			ready () {
+				super.ready();
+				
+				this.loadService('sonnet-map-service')
+				.then(mapService => {
+					this.set('_sublevelFromId', mapService._sublevelFromId);
+				})
+			}
+			
+			_onBack () {
+				this.loadPage('sonnet-maps-page');
+			}
+			
+			_onRegionSelect(e) {
+				// TODO: either keep the original behavior in the maps page,
+				// ie. if data is present, load the specified map
+				// or add a routine to load the page and change regions from external elements
+				this.loadPage('sonnet-maps-page')
+				.then(mapsPage => {
+					mapsPage.render(e.model.region.id)
+				})
+			}
+			
+			_computeNoMapsMsg (mapStatusChangeLog) {
+				for (let key in this.mapStatus) {
+					if (this._mapIsInstalled(this.mapStatus[key])) return false;
+				}
+				return true;
+            }
+			
+			_computeParentSubtext (region) {
+			    let sublevel = this._sublevelFromId(region.id);
+			    let parentArray = region.id.split('_');
+			    
+			    let parentText = '';
+			    
+			    for (let i = 0; i < sublevel; i++) {
+			        if (i !== 0) parentText += ' - ';
+			        
+			        let nextId = parentArray.slice(0, i + 1).join('_');
+			        
+			        for (let k = 0; k < this.mapRegions.length; k++) {
+			            let nextRegion = this.mapRegions[k];
+			            if (nextId === nextRegion.id) {
+			                parentText += nextRegion.name;
+			                break;
+			            }
+			        }
+			    }
+			    
+			    return parentText;
+			}
+			
+			_computeVisible (region, mapStatusChangelog) {
+				// can polymer computed bindings use promises? they said they were synchronous
+                return this._mapIsInstalled(this.mapStatus[region.id]);
+            }
+			
+			_mapIsInstalled (status) {
+				return status === "install-complete"
+			}
+		}
+
+		window.customElements.define(SonnetMapRegionPage.is, SonnetMapRegionPage);
+	</script>
+</dom-module>

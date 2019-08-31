@@ -1,0 +1,698 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="./sonnet-abstract-service.html" />
+<script src="../../bower_components/kjur-jsrsasign/jsrsasign-all-min.js" type="text/javascript"></script>
+
+
+<dom-module id="sonnet-session-service">
+	<script>
+		'use strict';
+		
+		class SonnetSessionService extends SonnetAbstractService {
+			static get is () {
+				return 'sonnet-session-service';
+			}
+
+			static get properties () {
+				return {
+					currentUser: {
+						type: Object,
+						value: null,
+						notify: true
+					},
+					username: {
+						type: String,
+						value: '',
+						notify: true
+					},
+					displayName: {
+						type: String,
+						value: '',
+						notify: true
+					},
+					userId: {
+						type: String,
+						value: '',
+						notify: true
+					},
+					icon: {
+						type: String,
+						value: '',
+						notify: true
+					},
+					session: {
+						type: Object,
+						value: null,
+						notify: true
+					},
+					clientConnected: {
+						type: Boolean,
+						value: true,
+						notify: true
+					},
+					defaultReconnectIntervalSeconds: {
+						type: Number,
+						value: 10
+					},
+					reconnectCountdownSeconds: {
+						type: Number
+					},
+					autoReconnectOn: {
+						type: Boolean,
+						value: false
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+
+				console.log('what the hell??');
+				
+				this.set('reconnectCountdownSeconds', this.defaultReconnectIntervalSeconds);
+				// this.loadService('sonnet-socket-service')
+				// .then(socketService => {
+				// 	socketService.addEventListener('client-heartbeat', this.refreshHeartbeat.bind(this));
+				// });
+				this.loadService('sonnet-socket-service')
+				.then(socketService => {
+					socketService.addEventListener('s-socket-status', this._socketStatusHandler.bind(this));
+				})
+
+				this.addEventListener('s-client-auto-reconnect', this._autoReconnectHandler.bind(this));	
+				console.log('this.reconnectCountdownSeconds: ' + this.reconnectCountdownSeconds);
+			}
+
+			loadSession (username) {
+				
+			}
+
+			createUser (displayName, username, password) {
+
+				var passwordHash,
+					userId,
+					iconHash;
+
+				return this.loadService('sonnet-crypto-service')
+					.then((cryptoService) => {
+						return Promise.all([
+							cryptoService.hashPassword(password),
+							cryptoService.generateId(),
+							cryptoService.generateId(16, true),
+							this.loadService('sonnet-storage-service')
+						])
+					})	
+					.then((values) => {
+						passwordHash = values[0];
+						userId = values[1];
+						iconHash = values[2];
+
+						var storageService = values[3];
+
+						return storageService.createUserDb(username, 1, {
+							// id, name, icon, created
+							contacts: {
+								key: {
+									keyPath: 'id'
+								},
+								indexes: {
+									name: {}
+								}
+							},
+
+							// id, name, members, group, created
+							chats: {
+								key: {
+									keyPath: 'id'
+								},
+								indexes: {
+									name: {},
+									lastMsgId: {}
+								}
+							},
+
+							// id, payload, chat, type, sender, sent, received
+							messages: {
+								key: {
+									keyPath: 'id',
+									autoIncrement: true
+								},
+								indexes: {
+									type: {},
+									content: {},
+									source: {},
+									destination: {},
+									chatId: {},
+									msgId: {}
+								}
+							},
+
+							// settings
+							settings: {
+								key: {
+									keyPath: 'key'
+								}
+							}
+						});
+					})
+					.then((storageService) => {
+						// open database
+						return storageService.openUserDb(username);
+					})
+					.then((userDb) => {
+						var transaction = userDb.transaction(['contacts', 'settings'], 'readwrite'),
+							contactsTable = transaction.objectStore('contacts'),
+							settingsTable = transaction.objectStore('settings');
+
+						contactsTable.put({
+							id: userId,
+							name: displayName,
+							icon: iconHash,
+							created: new Date()
+						});
+
+						settingsTable.put({
+							key: 'password',
+							value: passwordHash
+						});
+						
+						settingsTable.put({
+							key: 'name',
+							value: displayName
+						});
+
+						settingsTable.put({
+							key: 'username',
+							value: username
+						});
+
+						settingsTable.put({
+							key: 'userId',
+							value: userId
+						});
+
+						settingsTable.put({
+							key: 'icon',
+							value: iconHash
+						});
+
+						settingsTable.put({
+							key: 'created',
+							value: new Date()
+						});
+
+						return new Promise((resolve, reject) => {
+							transaction.oncomplete = (e) => {
+								userDb.close();
+								resolve();
+							};
+						});
+					})
+					.catch((err) => {
+						if (err.message === 'Database already exists') {
+							throw new TypeError('User already exists!');
+						} else {
+							throw err;
+						}
+					});
+			}
+
+			guestLogin (name) {
+				var userId,
+					iconHash;
+					
+				var currentUser;
+
+				return new Promise((resolve, reject) => {
+					this.loadService('sonnet-crypto-service')
+					.then((cryptoService) => {
+						userId = cryptoService.generateId();
+						iconHash = cryptoService.generateId(16, true);
+						
+						currentUser = {
+							username: 'guest',
+							userId: userId,
+							displayName: name,
+							icon: iconHash
+						};
+						
+						this.set('currentUser', currentUser);
+						
+						// this.set('username', 'guest');
+						// this.set('userId', userId);
+						// this.set('displayName', name);
+
+						return this.loadService('sonnet-socket-service');
+					})
+					.then((socketService) => {
+						socketService.openConnection({
+							id: currentUser.userId,
+							name: currentUser.displayName,
+							icon: currentUser.icon
+						});
+
+						this.dispatchEvent(new CustomEvent('login', {
+							detail: this.session
+						}));
+
+						resolve(true);
+					});
+				});
+			}
+
+			login (username, password) {
+				let cryptoService, storageService;
+				
+				return Promise.all([
+					this.loadService('sonnet-crypto-service'),
+					this.loadService('sonnet-storage-service')
+				])
+				.then((services) => {
+					cryptoService = services[0],
+					storageService = services[1];
+
+					return Promise.all([
+						cryptoService.hashPassword(password),
+						storageService.openUserDb(username)
+					])
+				})
+				.then((values) => {
+					var passwordHash = values[0],
+						userDb = values[1];
+
+					var transaction = userDb.transaction('settings', 'readonly'),
+						settingsTable = transaction.objectStore('settings');
+
+					var getPasswordHash = settingsTable.get('password');
+					
+					return new Promise((resolve, reject) => {
+						getPasswordHash.onsuccess = () => {
+							var loginSuccessful = getPasswordHash.result.value === passwordHash;
+                			
+							userDb.close();
+							resolve(loginSuccessful);
+                
+							// Create the session object
+							// this.set('session')
+						};
+					})
+				})
+				.then((loginSuccessful) => {
+					if (loginSuccessful) {
+						return this.completeLoginProcess(username);
+					}
+					else {
+						return Promise.reject(new Error('Unsuccessful login'));
+					}
+				})
+				.then(() => {
+					return Promise.resolve();
+				})
+				.catch((e) => {
+					return Promise.reject(new TypeError(e));
+				});
+			}
+
+			logout () {
+				this.set('currentUser', null);	// synced across other pages and services
+				this.stopAutoReconnect();
+				
+				let socketService, messageService;
+				return Promise.all([
+					this.loadService('sonnet-socket-service'),
+					this.loadService('sonnet-message-service')
+				])
+				.then(services => {
+					socketService = services[0];
+					messageService = services[1];
+					
+					socketService.closeConnection();	// promise-based
+					
+					messageService.setProperties({
+						chats: [],
+						currentChat: {},
+						currentChatName: '',
+						currentChatLog: [],
+						currentMessageOffset: 0
+					});
+					
+					return this.loadService('sonnet-contact-service');
+				})
+				.then(contactService => {
+					contactService.setProperties({
+						contacts: []
+					});
+					
+					return this.storeSessionTokenAndSecret(null, null);
+				})
+				.then(() => {
+					return Promise.resolve();
+				})
+				.catch(err => {
+					return Promise.reject(err);
+				})
+				// Write to localStorage, delete data from different views
+				// write changes to localstorage and refresh??
+				
+			}
+
+			changePassword () {
+				// Generate new encryption key, re-encrypt data and write to localStorage
+			}
+			
+			createSessionDb () {
+				return new Promise((resolve, reject) => {
+					this.loadService('sonnet-storage-service')
+					.then(storageService => {
+						return storageService.createSessionDb(1, {
+							tokens: {
+								key: {
+									keyPath: 'key'
+								}
+							}
+						});
+					})
+					.then(() => {
+						return resolve();
+					})
+					.catch(err => {
+						return reject(err)
+					})
+				})
+			}
+			
+			storeSessionTokenAndSecret (token, secret) {
+				let storageService;
+				return new Promise((resolve, reject) => {
+					this.loadService('sonnet-storage-service')
+					.then(service => {
+						storageService = service;
+						return storageService.openDb('session');
+					})
+					.then(sessionDb => {
+						let transaction = sessionDb.transaction('tokens', 'readwrite'),
+							tokensTable = transaction.objectStore('tokens');
+
+						tokensTable.put({
+							key: 'login',
+							value: {
+								token: token,
+								secret: secret
+							}
+						});
+						
+						transaction.oncomplete = (e) => {
+							sessionDb.close();
+							resolve();
+						};
+					})
+					.catch(err => {
+						return reject(err);
+					})
+				})
+			}
+			
+			generateSessionToken (payload, secret) {
+				let oHeader = {alg: 'HS256', typ: 'JWT'};
+				
+				// Sign JWT
+				let sHeader = JSON.stringify(oHeader);
+				let sPayload = JSON.stringify(payload);
+				let sJWT = KJUR.jws.JWS.sign("HS256", sHeader, sPayload, secret);
+				
+				return sJWT;
+			}
+			
+			readSessionTokenInfo () {
+				return new Promise((resolve, reject) => {
+					let loginTokenInfo;
+					this.loadService('sonnet-storage-service')
+					.then((storageService) => {
+						return storageService.openDb('session');
+					})
+					.then(sessionDb => {
+						let transaction = sessionDb.transaction('tokens', 'readonly'),
+							tokensTable = transaction.objectStore('tokens');
+						
+						var getLoginTokenInfo = tokensTable.get('login');
+						
+						transaction.oncomplete = (e) => {
+							loginTokenInfo = getLoginTokenInfo.result.value;
+							resolve(loginTokenInfo);
+							sessionDb.close();
+						}
+					})
+					.catch(err => {
+						return reject(err);
+					});
+				});
+			}
+			
+			validateSessionToken (tokenInfo) {
+				if (tokenInfo.token && tokenInfo.secret) {
+					let isValid = KJUR.jws.JWS.verifyJWT(tokenInfo.token, tokenInfo.secret, {
+						alg: ['HS256'],
+						verifyAt: Date.now() / 1000
+					});
+					
+					return isValid;
+				}
+				else return false;
+			}
+			
+			parseSessionToken (token) {
+				return KJUR.jws.JWS.readSafeJSONString(b64utoutf8(token.split('.')[1]));
+			}
+			
+			completeLoginProcess (username) {
+				return new Promise((resolve, reject) => {
+					let userDb;
+					let storageService;
+					this.loadService('sonnet-storage-service')
+					.then(service => {
+						storageService = service;
+						return storageService.openUserDb(username);
+					})
+					.then(db => {
+						userDb = db;
+						
+						let transaction = userDb.transaction('settings', 'readonly'),
+							settingsTable = transaction.objectStore('settings');
+
+						let getUserId = settingsTable.get('userId'),
+							getName = settingsTable.get('name'),
+							getIcon = settingsTable.get('icon');
+						
+						return Promise.all([
+							new Promise((resolve, reject) => {
+								getUserId.onsuccess = () => {
+									resolve(getUserId.result.value);
+								};
+							}),
+							new Promise((resolve, reject) => {
+								getName.onsuccess = () => {
+									resolve(getName.result.value);
+								};
+							}),
+							new Promise((resolve, reject) => {
+								getIcon.onsuccess = () => {
+									resolve(getIcon.result.value);
+								};
+							})
+						]);
+					})
+					.then(values => {
+						let userId = values[0],
+							displayName = values[1],
+							icon = values[2];
+							
+						let currentUser = {
+							username: username,
+							displayName: displayName,
+							userId: userId,
+							icon: icon
+						};
+						
+						this.set('currentUser', currentUser);
+
+						this.loadService('sonnet-socket-service')
+						.then((socketService) => {
+							socketService.openConnection({
+								id: currentUser.userId,
+								name: currentUser.displayName,
+								icon: currentUser.icon
+							});
+						});						
+
+						this.dispatchEvent(new CustomEvent('login', {
+							detail: {
+								userId: currentUser.userId,
+								username: currentUser.username
+							}
+						}));
+						
+						userDb.close();
+						return this.refreshSessionToken();
+
+					})
+					.then(() => {
+						
+						// this.initHeartbeat();
+						resolve();
+					})
+					.catch(err => {
+						console.log(err);
+						return reject(err);
+					});
+				})
+			}
+				
+			refreshSessionToken () {
+				return new Promise((resolve, reject) => {
+					let storageService, cryptoService;
+					
+					Promise.all([
+						this.loadService('sonnet-storage-service'),
+						this.loadService('sonnet-crypto-service')
+					])
+					.then(services => {
+						storageService = services[0];
+						cryptoService = services[1];
+						return storageService.dbExists('session');
+					})
+					.then(exists => {
+						if (exists) {
+							return Promise.resolve();
+						}
+						else {
+							return this.createSessionDb()
+							.then(() => {
+								return Promise.resolve();
+							})
+							.catch(err => {
+								return Promise.reject(err);
+							});
+						}
+					})
+					.then(() => {
+						let secret = cryptoService.generateId(32, true);
+						let iat = Date.now() / 1000;
+						let exp = iat + (15 * 60);
+						
+						let token = this.generateSessionToken(
+							{
+								iat: iat,
+								exp: exp,
+								usr: this.currentUser.username
+							},
+							secret
+						);
+						return this.storeSessionTokenAndSecret(token, secret);
+					})
+					.then(() => {
+						return resolve();
+					})
+					.catch(err => {
+						return reject(err);
+					});
+				});
+			}
+			
+			_socketStatusHandler (event) {
+				let connected = event.detail;
+				
+				if (this.currentUser) {
+					this.clientConnected = false;	// in case calling it from elsewhere eg the socket service
+					if (!connected) {
+						this.dispatchEvent(new CustomEvent('s-reconnect-countdown', {
+							detail: this.reconnectCountdownSeconds
+						}));
+						
+						if (!this.autoReconnectOn) {
+							this.autoReconnectOn = true;
+							this.dispatchEvent(new CustomEvent('s-client-auto-reconnect'));
+						}
+					}
+				}
+			}
+			
+			_autoReconnectHandler (event) {
+				this.reconnectInterval = setInterval(() => {
+					this.set('reconnectCountdownSeconds', this.reconnectCountdownSeconds - 1);
+					if (this.reconnectCountdownSeconds === 0) {
+						// attemptReconnect will not reset counter
+						// on unsuccessful or error attempts
+						// because it can be initiated by user input
+						// for now just let it count independently
+						// attemptReconnect will reset on success
+						this.attemptReconnect()
+						.then(success => {
+							if (!success) {
+								return Promise.resolve();
+							}
+						})
+						.catch(err => {
+							console.log(err);
+							return Promise.resolve();
+						})
+						.then(() => {
+							this._resetReconnectCountdown();
+						});
+					}
+					else {
+						this.dispatchEvent(new CustomEvent('s-reconnect-countdown', {
+							detail: this.reconnectCountdownSeconds
+						}));
+					}
+				}, 1000);
+			}
+			
+			_resetReconnectCountdown () {
+				this.set('reconnectCountdownSeconds', this.defaultReconnectIntervalSeconds);
+			}
+			
+			attemptReconnect () {
+				return new Promise((resolve, reject) => {
+					if (this.clientConnected === false) {
+						this.loadService('sonnet-socket-service')
+						.then(socketService => {
+							socketService.createNewSocketPromise();
+		                
+							return socketService.openConnection({
+								id: this.currentUser.userId,
+								name: this.currentUser.displayName,
+								icon: this.currentUser.icon
+							});
+						})
+						.then(() => {
+							this.stopAutoReconnect();
+							this._resetReconnectCountdown();
+							this.autoReconnectOn = false;
+							this.clientConnected = true;	// TODO: this only means the socket is connected
+							// the client being able to receive and send messages to other devices is only when client-connect is fired
+							// use this only to control connecting/reconnecting, not the displayed status to the user
+							return resolve(true);
+						})
+						.catch(err => {
+							// do nothing, another event will be fired
+							console.log(err);
+							return resolve(false);
+						});
+					}
+					else return reject(new Error('Already connected'));
+				});
+			}
+			
+			stopAutoReconnect (event) {
+				clearInterval(this.reconnectInterval);
+			}
+		}
+
+		window.customElements.define(SonnetSessionService.is, SonnetSessionService);
+	</script>
+</dom-module>

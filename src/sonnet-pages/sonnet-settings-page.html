@@ -1,0 +1,720 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+<link rel="import" href="../../bower_components/iron-ajax/iron-request.html" />
+
+<link rel="import" href="../../bower_components/iron-collapse/iron-collapse.html" />
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-battery-gauge.html" />
+<link rel="import" href="../sonnet-elements/sonnet-firmware-settings.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-map-list.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-wifi-settings.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+
+<dom-module id="sonnet-settings-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+			
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+			
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+			}
+			
+			#page {
+				height: 100%;
+			}
+			
+			#flexbox {
+				height: 100%;
+			}
+			
+			.battery-charging-text {
+				margin-right: 8px;
+			}
+			
+			.hidden {
+				display: none;
+			}
+			
+			.logoutOverlay {
+				position: fixed;
+				width: 100%;
+				height: 100%;
+				top: 0; 
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background-color: rgba(255,255,255,0.75);
+				z-index: 9999;
+				-webkit-user-select: none; /* Safari */        
+				-moz-user-select: none; /* Firefox */
+				-ms-user-select: none; /* IE10+/Edge */
+				user-select: none; /* Standard */
+				text-align: center;
+			}
+			
+			.settings-button {
+				padding-left: 10px;
+				padding-right: 10px;
+			}
+			
+			.settings-entry, .settings-button {
+				height: 50px;
+			}
+			
+			.section-title, .sub-entry {
+				padding-left: 10px;
+				padding-right: 10px;
+			}
+			
+			.separator {
+				margin: 0;
+			}
+			
+			.section-title {
+				background-color: #888888;
+				height: 40px;
+				color: white;
+			}
+			
+			.subtext {
+				font-size: 14px;
+				color: #888888;
+			}
+			
+			.full-width {
+				width: 100%;
+			}
+			
+			/* TODO: put in sonnet-styles */
+			.no-horizontal-padding {
+				padding-left: 0;
+				padding-right: 0;
+			}
+		</style>
+		
+		<div class="page-body flex vertical layout">
+			<sonnet-page-header>
+				<div class="title">Settings</div>
+				<div slot="right">
+					<!-- TODO: remove this when done testing -->
+					<sonnet-button>
+						<iron-icon icon="sonnet:download" on-tap="testFunc"></iron-icon>
+					</sonnet-button>
+				</div>
+			</sonnet-page-header>
+			
+			<div id="content" class="flex scrollable">
+				<div hidden="{{!loggedOut}}" class="logoutOverlay vertical center-justified layout center">
+					<div>
+						<div>
+							Logged Out
+						</div>
+						<div>
+							Refresh the page to sign in again.
+						</div>
+					</div>
+				</div>
+				
+				<div id="container">
+					<!-- using 'hidden' properties here because using dom-ifs makes it hard to access elements in the shadow dom-->
+					<div hidden="{{tokenIsValid}}">
+						<div class="settings-button vertical center-justified layout" on-tap="_onLogout">
+							<div>
+								Logout
+							</div>
+						</div>
+						<hr class="separator"/>
+						
+						<div class="settings-button vertical center-justified layout" >
+							<div class="horizontal center-justified layout">
+								<div class="flex vertical center-justified layout">
+									Battery
+								</div>
+								<div class="horizontal center layout">
+									<div class="subtext battery-charging-text">
+										[[powerState.chargingText]]
+									</div>
+									<div>
+										<sonnet-battery-gauge bars="[[powerState.bars]]"></sonnet-battery-gauge>
+									</div>
+								</div>
+							</div>
+						</div>
+						<hr class="separator"/>
+						
+						<dom-if if="{{!passwordExists}}">
+						<template>
+							<div class="settings-button vertical center-justified layout">
+								Set Settings Password
+							</div>
+							<div class="sub-entry vertical center-justified layout">
+								<div>
+									<sonnet-input type="password" placeholder="New password" icon="sonnet:lock" icon-position="right" value="{{initialSettingsPassword}}" id="initial-password-input" ></sonnet-input>
+									<hr class="separator" />
+									<sonnet-input type="password" placeholder="Confirm password" icon="sonnet:lock" icon-position="right" value="{{confirmInitialSettingsPassword}}" id="confirm-initial-password-input"></sonnet-input>
+								</div>
+								<div>
+									<sonnet-button id="initialize-settings-password-button" class="full-width no-horizontal-padding" size="small" block on-tap="_onInitializeSettingsPassword">Set New Password</sonnet-button>
+								</div>
+							</div>
+						</template>
+						</dom-if>
+						
+						<dom-if if="{{passwordExists}}">
+						<template>
+							<div class="settings-button vertical center-justified layout" on-tap="_onLogin">
+								<div>
+									Administrator settings
+								</div>
+							</div>
+						</template>
+						</dom-if>
+					</div>
+					
+					<div hidden="{{!tokenIsValid}}">
+						<div id="collapse-btn-battery"class="section-title vertical center-justified layout" on-tap="_onToggleCollapse">
+							Battery
+						</div>
+						
+						<iron-collapse id="collapse-battery" opened>
+							<div class="settings-button vertical center-justified layout" >
+								<div class="horizontal center-justified layout">
+									<div class="flex vertical center-justified layout">
+										Status
+									</div>
+									<div class="horizontal center layout">
+										<div class="subtext battery-charging-text">
+											[[powerState.chargingText]]
+										</div>
+										<div>
+											<sonnet-battery-gauge bars="[[powerState.bars]]"></sonnet-battery-gauge>
+										</div>
+									</div>
+								</div>
+							</div>
+						</iron-collapse>
+						
+						<hr class="separator" />
+						
+						<div id="collapse-btn-firmware" class="section-title vertical center-justified layout" on-tap="_onToggleCollapse">
+							Firmware
+						</div>
+						<iron-collapse id="collapse-firmware">
+							<div class="sub-entry">
+								<sonnet-firmware-settings
+									id="firmwareSettings">
+								</sonnet-firmware-settings>
+							</div>
+						</iron-collapse>
+						
+						<hr class="separator" />
+						
+						<div id="collapse-btn-wifi" class="section-title vertical center-justified layout" on-tap="_onToggleCollapse">
+							Wi-Fi
+						</div>
+						
+						<iron-collapse id="collapse-wifi">
+							<sonnet-wifi-settings id="wifiSettings"></sonnet-wifi-settings>
+						</iron-collapse>
+						
+						<hr class="separator" />
+						
+						<div id="collapse-btn-maps" class="section-title vertical center-justified layout" on-tap="_onToggleCollapse">
+							Maps
+						</div>
+						<iron-collapse id="collapse-maps">
+							<sonnet-map-list
+								id="mapList"
+								map-regions="[[mapRegions]]"
+								map-status="[[mapStatus]]">
+							</sonnet-map-list>
+						</iron-collapse>
+						
+						<hr class="separator" />
+						
+						<div id="collapse-btn-settings-password" class="section-title vertical center-justified layout" on-tap="_onToggleCollapse">
+							Change Settings Password
+						</div>
+						
+						<iron-collapse id="collapse-settings-password">
+							<div class="sub-entry vertical center-justified layout">
+								<div>
+									<sonnet-input type="password" placeholder="Current password" icon="sonnet:lock" icon-position="right" value="{{currentSettingsPassword}}" id="current-password-input"></sonnet-input>
+									<hr class="separator" />
+									<sonnet-input type="password" placeholder="New password" icon="sonnet:lock" icon-position="right" value="{{changedSettingsPassword}}" id="changed-password-input"></sonnet-input>
+									<hr class="separator" />
+									<sonnet-input type="password" placeholder="Confirm password" icon="sonnet:lock" icon-position="right" value="{{confirmChangedSettingsPassword}}" id="confirm-changed-password-input"></sonnet-input>
+								</div>
+								<div class="horizontal center-justified layout">
+									<sonnet-button id="change-settings-password-button" size="small" on-tap="_onChangeSettingsPassword" class="full-width no-horizontal-padding">Change</sonnet-button>
+								</div>
+							</div>	
+						</iron-collapse>
+						
+						<hr class="separator" />
+						
+						<div class="settings-button vertical center-justified layout" on-tap="_onLogout">
+							<div>
+								Logout
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		
+	</template>
+	
+	<script>
+		'use strict';
+		
+		class SonnetSettingsPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-settings-page';
+			}
+			
+			static get properties () {
+				return {
+					sections: {
+						type: Array,
+						// this is for the accordion
+						// follow the id pattern in the sections above
+						// if you want to add new ones here
+						value: [
+							'battery',
+							'firmware',
+							'wifi',
+							'maps',
+							'settings-password'
+						]
+					},
+					bSignedIn: {
+						type: Boolean,
+						value: false
+					},
+					jwt: {
+						type: String,
+						value: null,
+						notify: true
+					},
+					tokenIsValid: {
+						type: Boolean,
+						value: false
+					},
+					passwordExists: {
+						type: Boolean,
+						value: false
+					},
+					loggedOut: {
+						type: Boolean,
+						value: false
+					},
+					powerState: {
+						type: Object,
+						value: {
+							bars: 0,
+							chargingText: ""
+						}
+					},
+					mapRegions: {
+						type: Array,
+						notify: true
+					},
+					mapStatus: {
+						type: Object,
+						notify: true
+					},
+					sdMounted: {
+						type: Boolean
+					}
+				};
+			}
+			
+			constructor () {
+				super();
+			}
+			
+			ready () {
+				super.ready();
+				
+				this.checkForSettingsPassword()
+				.then(pwExists => {
+					this.set('passwordExists', pwExists);
+					// this.set('passwordExists', false);
+				})
+				.catch((err) => {
+					console.log(err);
+					alert(err.message);
+				})
+				
+				this.addEventListener('settings-login', (e) => {
+					this.loadPageDetails();
+				});
+				
+				// TODO: remove this garbage after done with SWA-153
+				// this.$.mapList.addEventListener('region-action', this._onRegionAction.bind(this));
+			}
+			
+			_onFocus (e) {
+				this._checkJwt()
+				.then(response => {
+					this.set('tokenIsValid', true);
+					// this.dispatchEvent(new CustomEvent('settings-login'));
+				})
+				.catch(err => {
+					this.set('tokenIsValid', false);
+				});
+				
+				this.updatePowerState();
+				
+				this.loadService('sonnet-map-service')
+				.then(mapService => mapService.getMapStatus())
+			}
+			
+			changeSettingsPassword () {
+				return new Promise((resolve, reject) => {
+					let changedPasswordHash;
+					let body;
+					if (this.shadowRoot.querySelector('#change-settings-password-button')) {
+						this.shadowRoot.querySelector('#change-settings-password-button').set('disabled', true);
+					}
+					
+					if (!this.currentSettingsPassword || this.currentSettingsPassword.length < 1) {
+						return reject(new Error('The current password is required.'));
+					}
+					
+					if (!this.changedSettingsPassword || this.changedSettingsPassword.length < 1) {
+						return reject(new Error('New password can\'t be blank.'));
+					}
+					
+					if (!this.confirmChangedSettingsPassword || this.confirmChangedSettingsPassword.length < 1) {
+						return reject(new Error('Please confirm the new password.'));
+					}
+					
+					if (this.changedSettingsPassword !== this.confirmChangedSettingsPassword) {
+						return reject(new Error('Passwords don\'t match!'));
+					}
+					
+					this.loadService('sonnet-crypto-service')
+					.then(cryptoService => {
+						return Promise.all([
+							cryptoService.hashPassword(this.currentSettingsPassword),
+							cryptoService.hashPassword(this.changedSettingsPassword)
+						]); 
+					})
+					.then(values => {
+						let currentPasswordHash = values[0];
+						changedPasswordHash = values[1];
+						
+						body = {
+							currentPasswordHash: currentPasswordHash,
+							changedPasswordHash: changedPasswordHash
+						};
+						
+						return this.loadService('sonnet-rest-service')
+					}).then(restService => {
+						return restService.postBackend(
+							{ token: this.jwt },
+							'auth',
+							'change-settings-password',
+							body
+						);
+					}).then(() => {
+						// request new jwt
+						return this._getJwt(changedPasswordHash);
+					}).then(jwt => {
+						this.set('jwt', jwt);
+						resolve();
+						return Promise.resolve();
+					})
+					.catch(err => {
+						reject(err);
+						return Promise.resolve();
+					})
+					.then(() => {
+						if (this.shadowRoot.querySelector('#change-settings-password-button')) {
+							this.shadowRoot.querySelector('#change-settings-password-button').set('disabled', false);
+						}
+					});
+				});
+			}
+			
+			checkForSettingsPassword () {
+				return new Promise((resolve, reject) => {
+					return this.loadService('sonnet-rest-service')
+					.then(restService => {
+						return restService.postBackend(
+							null, 
+							'auth',
+							'check-for-settings-password',
+							null
+						);
+					}).then(response => {
+						return resolve(response.exists);
+					}).catch(err => {
+						console.log(err);
+						return reject(err);
+					});
+				});
+			}
+			
+			initializeSettingsPassword () {
+				return new Promise((resolve, reject) => {
+					let body;
+					if (this.initialSettingsPassword !== this.confirmInitialSettingsPassword) {
+						return reject(new Error('Passwords don\'t match!'));
+					}
+					
+					this.loadService('sonnet-crypto-service')
+					.then(cryptoService => {
+						return cryptoService.hashPassword(this.initialSettingsPassword);
+					})
+					.then(hash => {
+						body = {
+							passwordHash: hash
+						};
+						
+						return this.loadService('sonnet-rest-service');
+					}).then(restService => {
+						restService.postBackend(
+							null,
+							'auth',
+							'initialize-settings-password',
+							body
+						).then(() => {
+							return resolve();
+						}).catch(err => {
+							console.log('could not initialize password')
+							return reject(err);
+						});
+					});
+				})
+			}
+			
+			loadPageDetails () {
+				// TODO: add errors to an array and display them using a single alert
+				this.$.firmwareSettings.getInstalledFirmwares()
+				.catch(err => {
+					console.log(err)
+					alert(err.message)
+					return Promise.resolve();
+				})
+				.then(() => {
+					return this.$.wifiSettings._onRefreshNearbyWifiNetworks()
+				})
+				.catch(err => {
+					console.log(err);
+					alert(err.message);
+				});
+				
+				this.updatePowerState();
+			}
+			
+			_getPowerState () {
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'device',
+						'get-power-state',
+						null
+					);
+				});
+			}
+			
+			_onChangeSettingsPassword (e) {
+				e.stopPropagation();
+				
+				this.changeSettingsPassword()
+				.then(() => {
+					alert('Password changed successfully!')
+					return Promise.resolve();
+				})
+				.catch((err) => {
+					console.log(err)
+					alert('Error!\n' + err.message)
+					return Promise.resolve();
+				})
+				.then(() => {
+					this.set('currentSettingsPassword', null);
+					this.set('changedSettingsPassword', null);
+					this.set('confirmChangedSettingsPassword', null);
+				});
+			}
+			
+			_onInitializeSettingsPassword (e) {
+				e.stopPropagation();
+				
+				this.initializeSettingsPassword()
+				.then(() => {
+					alert('Password set successfully! Please login to continue.');
+					this.set('passwordExists', true);
+					return Promise.resolve();
+				})
+				.catch((err) => {
+					alert('Error!\n' + err.message);
+					return Promise.resolve();
+				})
+				.then(() => {
+					this.set('initialSettingsPassword', null);
+					this.set('confirmInitialSettingsPassword', null);
+				})
+			}
+			
+			_onLogin (e) {
+				e.stopPropagation();
+				
+				let settingsPassword = prompt('Administrator settings password:');
+				
+				if (settingsPassword) {
+					this.loadService('sonnet-crypto-service')
+					.then(cryptoService => {
+						// TODO: refactor these promises and remove the redundant crap
+						return cryptoService.hashPassword(settingsPassword);
+					})
+					.then(hash => {
+						return this._getJwt(hash);
+					})
+					.then(token => {
+						console.log('got token')
+						this.set('jwt', token);
+						this.set('tokenIsValid', true);
+						this.dispatchEvent(new CustomEvent('settings-login'));
+						return Promise.resolve();
+					})
+					.catch(err => {
+						console.log('onLogin err')
+						console.log(err)
+						this.set('tokenIsValid', false);
+						alert(err.message);
+						return Promise.resolve();
+					})
+					.then(() => {
+						this.set('settingsPassword', '');
+					});
+				}
+			}
+			
+			_onLogout (e) {
+				let sessionService;
+				
+				this.set('jwt', null);
+				
+				this.loadService('sonnet-session-service')
+				.then(service => {
+					sessionService = service;
+					return sessionService.logout();
+				})
+				.then(() => {
+					this.set('loggedOut', true);
+				})
+				.catch(err => {
+					console.log(err);
+				})
+			}
+			
+			_checkJwt () {
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						{ token: this.jwt },
+						'auth',
+						'check-jwt',
+						null
+					)
+				});
+			}
+			
+			_getJwt (passwordHash) {
+				let body = {
+					passwordHash: passwordHash
+				};
+				
+				return this.loadService('sonnet-rest-service')
+				.then(restService => {
+					return restService.postBackend(
+						null,
+						'auth',
+						'get-new-jwt',
+						body
+					)
+				}).catch(err => {
+					console.log('getJwt error')
+					return Promise.reject(err);
+				});
+			}
+			
+			_computeInitializePassword (passwordExists) {
+				return !passwordExists;
+			}
+			
+			updatePowerState () {
+				this.set('powerState.chargingText', "Checking...");
+				this.notifyPath('powerState.chargingText');
+				
+				this._getPowerState()
+				.then(resp => {
+					console.log(resp)
+					this.set('powerState.bars', resp.bars);
+					
+					if (resp.charging) {
+						this.set('powerState.chargingText', 'Charging');
+					} else {
+						this.set('powerState.chargingText', 'Not charging');
+					}
+					
+					this.notifyPath('powerState.bars');
+					this.notifyPath('powerState.chargingText');
+				}).catch(err => {
+					this.set('powerState.bars', 0);
+					this.set('powerState.chargingText', 'Error')
+					this.notifyPath('powerState.bars');
+					this.notifyPath('powerState.chargingText');
+					console.log(err)
+				});
+			}
+			
+			_onToggleCollapse (e) {
+				console.log(e);
+				let buttonId = e.composedPath()[0].id;
+				let sectionId = buttonId.replace('collapse-btn-', '');
+				
+				for (let i = 0; i < this.sections.length; i++) {
+					if (this.sections[i] !== sectionId) {
+						this.$['collapse-' + this.sections[i]].set('opened', false);
+					}
+				}
+				
+				this.$['collapse-' + sectionId].toggle();
+			}
+			
+			testFunc (e) {
+				alert('testFunc')
+				navigator.geolocation.getCurrentPosition((position) => {
+					console.log('got current position')
+					alert(position);
+				}, (err) => {
+					console.log(err);
+					alert('Unable to receive geolocation data.');
+				});
+			}
+		}
+		
+		window.customElements.define(SonnetSettingsPage.is, SonnetSettingsPage);
+	</script>
+</dom-module>

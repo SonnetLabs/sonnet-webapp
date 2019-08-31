@@ -1,0 +1,236 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-chat.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+
+<dom-module id="sonnet-chat-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+				position: relative;
+			}
+
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+			}
+
+			sonnet-button[disabled] {
+				opacity: 0.5;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+			
+			/* TODO: put the page header in normal flow in its module */
+			.page-header {
+				position: relative
+			}
+
+			#container {
+				height: 100%;
+				width: 100%;
+			}
+			
+			.msg-indicator::before {
+				position: absolute;
+				right: 0;
+				top: 0;
+				height: 8px;
+				width: 8px;
+				background-color: #e74c3c;
+				z-index: 9000;
+				border-radius: 50%;
+				content: '';
+				font-size: 0px;
+			}
+		</style>
+
+		<div class="page-body vertical layout">
+			<div class="page-header">
+				<sonnet-page-header>
+					<div slot="left">
+						<sonnet-button id="on-back-btn" on-tap="_onBack" class$="[[_computeOnBackClass(indicators)]]">
+							<iron-icon icon="sonnet:arrow-left" class$="[[_computeIconClass(indicators.*)]]"></iron-icon>
+						</sonnet-button>
+					</div>
+					<div class="title">[[currentChat.name]]</div>
+					<div slot="right">
+						<sonnet-button block on-tap="_testMethod">
+							<iron-icon icon="sonnet:speech-bubble"></iron-icon>
+						</sonnet-button>
+					</div>
+				</sonnet-page-header>
+			</div>
+
+			<div id="container" class="flex scrollable">
+				<sonnet-chat
+					id="chat-element"
+					current-user="{{currentUser}}"
+					current-chat="{{currentChat}}"
+					current-chat-log="{{currentChatLog}}"
+					current-chat-members="{{currentChatMembers}}">
+				</sonnet-chat>
+			</div>
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetChatPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-chat-page';
+			}
+
+			static get properties () {
+				return {
+					prevPage: String,
+					contact: {
+						type: Object
+					},
+					// userId: {
+					// 	type: String
+					// },
+					currentUser: {
+						type: Object,
+						notify: true
+					},
+					currentChat: {
+						type: Object,
+						notify: true
+					},
+					currentChatLog: {
+						type: Array,
+						notify: true
+					},
+					currentChatMembers: {
+						type: Array,
+						notify: true
+					},
+					desktop: {
+						type: Boolean,
+						observer: '_desktopChanged'
+					},
+					indicators: {
+						type: Object,
+						notify: true
+					},
+					lastChat: {
+						type: Object
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+			}
+
+			_onBack () {
+				// this.$['message-container'].classList.add('visibility-none');
+				this.set('currentChat', {});
+				
+				// if loading the chat page from anywhere other than chats or contacts
+				if (!this.prevPage || (this.prevPage !== 'sonnet-chats-page' && this.prevPage !== 'sonnet-contacts-page')) {
+					this.prevPage = 'sonnet-chats-page';
+				}
+
+				this.loadPage(this.prevPage);
+				
+				this.set('indicators.msg', false);
+			}
+
+			_onFocus (e) {
+				// TODO: investigate if it's possible to send the chat data
+				// in loadPage
+				// given that the desktop version will not explicitly load this page
+				
+				// the data initialization and redrawing are called in the chats page before this page loads
+				// otherwise there will be a flash of the previous chat's msgs
+				this.set('prevPage', e.detail.prevPage);
+				this.$['chat-element'].scrollToBottom();
+			}
+
+			_onBlur (e) {
+				this.set('contact', null);
+			}
+			
+			_computeIconClass (indicatorChangeRecord) {
+				let classes = '';
+				let path = indicatorChangeRecord.path.split('.')[1];
+				
+				switch (path) {
+					case 'msg':
+					if (indicatorChangeRecord.value) {
+						classes += 'msg-indicator';
+					}
+					break;
+				}
+				
+				return classes;
+			}
+			
+			_testMethod () {
+				var messageService;
+                
+				this.loadService('sonnet-message-service')
+				.then((service) => {
+					messageService = service;
+					// messageService._testLoadMsgs();
+					messageService._showLocalChats();
+                
+				})
+				
+				// var messageContainer = this.$['message-container'];
+                // 
+				// console.log('chatPage._scrollNewIncomingMsg: scrollTop:');
+				// console.log(messageContainer.scrollTop);
+                // 
+				// console.log('scrollHeight:');
+				// console.log(messageContainer.scrollHeight);
+                // 
+				// console.log('offsetHeight:');
+				// console.log(messageContainer.offsetHeight);
+                // 
+				// console.log('scrollHeight - offsetHeight:');
+				// console.log(messageContainer.scrollHeight - messageContainer.offsetHeight);
+			}
+			
+			_computeOnBackClass (indicators) {
+				let classes = '';
+				
+				if (indicators.msg) {
+					classes += 'msg-indicator';
+				}
+				
+				return classes;
+			}
+			
+			_desktopChanged (newV, oldV) {
+				if (this.currentChat.id && newV === true) {
+					this.loadPage('sonnet-chats-page');
+				}
+			}
+		}
+
+		window.customElements.define(SonnetChatPage.is, SonnetChatPage);
+	</script>
+</dom-module>

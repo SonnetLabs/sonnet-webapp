@@ -1,0 +1,80 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+
+<link rel="import" href="./sonnet-styles.html">
+
+<script src="../../bower_components/qrious/dist/qrious.js" type="text/javascript"></script>
+
+<dom-module id="sonnet-qrcode">
+    <template>
+        <style>
+            :host {
+                display: inline;
+            }
+            
+            #qr {
+                height: auto;
+                width: auto;
+            }
+            
+        </style>
+        
+        <canvas id="canvas"></canvas>
+    </template>
+    
+    <script>
+        'use strict';
+
+        class SonnetQrCode extends Polymer.Element {
+            static get is () {
+                return 'sonnet-qrcode';
+            }
+            
+            static get properties () {
+                return {
+                    size: {
+                        type: Number,
+                        value: 100
+                    },
+                    value: {
+                        type: String
+                    }
+                };
+            }
+            
+            constructor () {
+                super();
+            }
+            
+            ready () {
+                super.ready();
+                
+                this._init();
+            }
+            
+            _init () {
+                this.qr = new QRious({
+                    element: this.$.canvas,
+                    level: "L",
+                    size: this.size,
+                    value: this.value
+                });
+            }
+            
+            setQrCode (payload) {
+                this.qr.set({value: payload});
+            }
+            
+            setOptions (options) {
+                this.qr.set(options);
+            }
+            
+            // if type is null, mime type is "image/png"
+            toDataUrl (type) {
+                return this.qr.toDataURL(type);
+            }
+        }
+        
+        window.customElements.define(SonnetQrCode.is, SonnetQrCode);
+    </script>
+</dom-module>
+

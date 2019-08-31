@@ -1,0 +1,256 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-ajax/iron-request.html" />
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<link rel="import" href="./sonnet-abstract-tab-page.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+<link rel="import" href="../sonnet-elements/sonnet-map-mapboxgl.html" />
+
+<dom-module id="sonnet-maps-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+			}
+			
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+			
+			sonnet-button {
+				padding: 13px;
+				--sonnet-button-padding: 0;
+			}
+			
+			#page {
+				height: 100%;
+			}
+			
+			#flexbox {
+				height: 100%;
+			}
+			
+			#container {
+				/* padding: 50px 0; */
+				/*height: 100%;*/
+				/*position: static;*/
+				overflow: hidden;
+			}
+
+			sonnet-map {
+				/* border-top: 2px solid #fff;
+				border-bottom: 2px solid #fff; */
+			}
+			
+			.sd-not-mounted {
+				width: 100%;
+				height: 100%;
+			}
+			
+			.map-container {
+				width: 100%;
+				height: 100%;
+			}
+			
+			.overlay {
+				position: relative;
+				width: 100%;
+				height: 100%;
+				top: 0; 
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background-color: rgba(255,255,255,1);
+				z-index: 9999;
+				text-align: center;
+			}
+		</style>
+
+
+		<div class="page-body flex vertical layout">
+			<sonnet-page-header>
+				<div class="title">Maps</div>
+				<div slot="right">
+					<sonnet-button>
+						<iron-icon icon="sonnet:globe" on-click="openRegionPage"></iron-icon>
+					</sonnet-button>
+				</div>
+			</sonnet-page-header>
+			
+			<div id="container" class="flex">
+				<div hidden="{{sdMounted}}" class="sd-not-mounted vertical layout center-justified center">
+					<div>
+						SD card not inserted.
+					</div>
+					<sonnet-button size="small" on-tap="_getMapStatus">
+						Refresh
+					</sonnet-button>
+				</div>
+				
+				<div hidden="{{!sdMounted}}" class="map-container">
+					
+					<!-- TODO: restore this stuff -->
+				
+					<dom-if if="[[_computeNoInstalledMaps(installedMaps.*)]]">
+					<template>
+						<div class="overlay vertical layout center center-justified">
+							<div>
+								No maps installed.
+							</div>
+							<div>
+								Install some from the Settings Page.
+							</div>
+							<div>
+								 (requires administrator access)
+							</div>
+						</div>
+					</template>
+					</dom-if>
+					
+					<div hidden="[[_showMap]]" class="full-size">
+						<div class="overlay vertical layout center center-justified">
+							Select a map from the region list in the upper right.
+						</div>
+					</div>
+					
+					<div hidden="[[!_showMap]]" class="full-size">
+						<sonnet-map id="map"></sonnet-map>
+					</div>
+				</div>
+			</div>
+		</div>
+
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetMapsPage extends SonnetAbstractTabPage {
+			static get is () {
+				return 'sonnet-maps-page';
+			}
+
+			static get properties () {
+				return {
+					sdMounted: {
+						type: Boolean
+					},
+					currentMap: {
+						type: String,
+						value: null,
+						notify: true
+					},
+					installedMaps: {
+						type: Object,
+						notify: true
+					},
+					sdMounted: {
+						type: Boolean
+					},
+					_showMap: {
+						type: Boolean
+					}
+				};
+			}
+
+			constructor () {
+				super();
+			}
+			
+			ready () {
+				super.ready();
+				this.loadService('sonnet-map-service')
+				.then(mapService => {
+					mapService.addEventListener('s-map-region-change', this.reposition.bind(this));
+					
+					mapService.getMapStatus()
+					.catch(err => {
+						console.log(err);
+					});
+				});
+				
+				this.set('_showMap', false);
+			}
+			
+			_onFocus (e) {
+				// this function previously loaded and rendered a map if any data was sent on loadPage
+				// but the timing for it wasn't predictable and the use cases for loading the maps page varied
+				// so that this was not a one-size-fits-all approach.
+				
+				// synchronizing this function would involve passing it a promise from the caller
+				// that would resolve when this is done
+				// but that's cumbersome when maybe you just want to load a map region
+				
+			}
+			
+			dropPin (lon, lat) {
+				this.$.map.dropPin(lon, lat);
+			}
+			
+			addPinAndZoom(lon, lat) {
+				this.repositionAndZoom(lon, lat);
+				this.dropPin(lon, lat);
+			}
+			
+			openRegionPage () {
+				this.loadService('sonnet-map-service')
+				.then(mapService => mapService.getMapStatus())
+				.then(mapStatus => this.loadPage('sonnet-map-region-page'))
+				.catch(err => {
+					alert(err.message);
+				});
+			}
+			
+			// COMBAK: demo video only, remove when done
+			render (region) {
+				this.showMap();
+				
+				return new Promise((resolve, reject) => {
+					this.$.map.render(false, region)
+					.then(() => {
+						console.log('render -> render, resolving')
+						resolve()
+					}).catch(err => reject(err));
+				});
+			}
+			
+			repositionAndZoom (lon, lat) {
+				this.$.map.reposition([lon, lat], 17);
+			}
+			
+			reposition (event) {
+				// this.$.map.reposition([event.longitude, event.latitude], event.zoom);
+				console.log(event);
+			}
+			
+			showMap () {
+				this.set('_showMap', true);
+			}
+			
+			_getMapStatus () {
+				return this.loadService('sonnet-map-service')
+				.then(mapService => mapService.getMapStatus())
+				.catch(err => {
+					console.log(err)
+				})
+			}
+			
+			_computeNoInstalledMaps(installedMapsChangeLog) {
+				let installed = Object.keys(this.installedMaps);
+
+				if (installed.length === 0) return true;
+				else return false; 
+			}
+		}
+		
+		window.customElements.define(SonnetMapsPage.is, SonnetMapsPage);
+	</script>
+</dom-module>

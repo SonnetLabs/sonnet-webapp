@@ -1,0 +1,155 @@
+<link rel="import" href="../../bower_components/polymer/polymer-element.html" />
+<!--<link rel="import" href="../polymer/lib/elements/dom-if.html" />-->
+<!--<link rel="import" href="../polymer/lib/elements/dom-repeat.html" />-->
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html" />
+<link rel="import" href="../../bower_components/iron-flex-layout/iron-flex-layout-classes.html" />
+
+<link rel="import" href="../sonnet-elements/sonnet-styles.html" />
+<link rel="import" href="../sonnet-elements/sonnet-page-header.html" />
+<link rel="import" href="../sonnet-elements/sonnet-button.html" />
+<link rel="import" href="../sonnet-elements/sonnet-input.html" />
+<link rel="import" href="../sonnet-elements/sonnet-icons.html" />
+
+<link rel="import" href="./sonnet-abstract-page.html" />
+
+<dom-module id="sonnet-register-page">
+	<template>
+		<style include="iron-flex iron-flex-alignment sonnet-styles">
+			:host {
+				display: block;
+				height: 100%;
+				width: 100%;
+				-webkit-box-sizing: border-box;
+                box-sizing: border-box;
+				@apply(--layout-horizontal);
+				@apply(--layout-center);
+			}
+
+			sonnet-input {
+				--sonnet-input-bg: #ecf0f1;
+				--sonnet-input-fg: #2c3e50;
+			}
+
+			.title {
+				font-size: 1.25em;
+				font-weight: bold;
+			}
+
+			.form-element {
+				margin-bottom: 1em;
+			}
+
+			.form-element:last-child {
+				margin-bottom: 0;
+			}
+
+			#register {
+				--sonnet-button-fg: #fff;
+				--sonnet-button-bg: #2c3e50;
+			}
+			
+			#container {
+				/* margin-top: 75px;
+				margin-bottom: 75px; */
+			}
+			
+			#content {
+				margin: 200px 0 200px 0;
+			}
+			
+			#page-header {
+				position: static;
+				width: 100%;
+			}
+		</style>
+		
+		<div class="page-body vertical center layout">
+			<div id="page-header">
+				<sonnet-page-header>
+					<div class="title">Register</div>
+					<div slot="right">
+						<sonnet-button on-tap="_onClose">
+							<iron-icon icon="sonnet:cross"></iron-icon>
+						</sonnet-button>
+					</div>
+				</sonnet-page-header>
+			</div>
+			
+			<div id="content" class="flex vertical layout center-justified">
+				<div id="container" class="layout center-justified vertical center">
+					<sonnet-input class="form-element" size="large" type="text" placeholder="Full Name" icon="sonnet:eye" icon-position="right" auto-capitalize="words" value="{{name}}"></sonnet-input>
+					<sonnet-input class="form-element" size="large" type="text" placeholder="Username" icon="sonnet:head" icon-position="right" auto-capitalize="off" auto-correct="off" value="{{username}}"></sonnet-input>
+					<sonnet-input class="form-element" size="large" type="password" placeholder="Password" icon="sonnet:lock" icon-position="right" value="{{password}}"></sonnet-input>
+					<sonnet-input class="form-element" size="large" type="password" placeholder="Confirm Password" icon="sonnet:lock" icon-position="right" value="{{passwordConfirm}}"></sonnet-input>
+					<sonnet-button id="register" class="form-element" size="large" block on-tap="_onRegister">Register</sonnet-button>
+				</div>
+			</div>
+			
+		</div>
+	</template>
+
+	<script>
+		'use strict';
+
+		class SonnetRegisterPage extends SonnetAbstractPage {
+			static get is () {
+				return 'sonnet-register-page';
+			}
+
+			static get properties () {
+				return {};
+			}
+
+			constructor () {
+				super();
+			}
+
+			ready () {
+				super.ready();
+				// this.loadService('sonnet-session-service');
+			}
+
+			_onClose (e) {
+				e.stopPropagation();
+				this.loadPage('sonnet-login-page');
+			}
+
+			_onRegister (e) {
+				e.stopPropagation();
+
+				// Check if username is taken
+
+				if (this.username.length && this.password.length && (this.password === this.passwordConfirm)) {
+					
+					// if everything looks okay, Register the user
+					this.loadService('sonnet-session-service')
+						.then((sessionService) => {
+							return sessionService.createUser(this.name, this.username, this.password);
+						})
+						.then(() => {
+							this.set('name', '');
+							this.set('username', '');
+							this.set('password', '');
+							this.set('passwordConfirm', '');
+
+							alert('Registration Successful!');
+
+							this.loadPage('sonnet-login-page');
+						})
+						.catch((err) => {
+							alert(err.message);
+						});
+				} else if (!this.username.length) {
+					alert('Username cannot be blank!');
+				} else if (!this.password.length) {
+					alert('Password cannot be empty!');
+				} else if (this.password !== this.passwordConfirm) {
+					alert('Passwords do not match!');
+				}
+			}
+		}
+
+		window.customElements.define(SonnetRegisterPage.is, SonnetRegisterPage);
+	</script>
+</dom-module>
